@@ -110,60 +110,157 @@ export const serviceData = [
 
 ];
 export const carData = [
+
     {
         id: 1,
         image: assets.car1,
-        price: "$25",
-        title: "Mercedes Grand",
+        price: "$85",
+        title: "Audi A8 L",
         brand: "AUDI",
+        year: "2024",
+        seats: "5",
+        transmission: "Automatic",
+        fuel: "Petrol",
+        description: "The Audi A8 L represents the pinnacle of luxury and digital innovation. With its spacious interior and high-end materials, it offers a first-class traveling experience.",
+        features: ["Bang & Olufsen Sound", "Matrix LED Headlights", "Adaptive Air Suspension", "Massage Seats"],
+        specs: {
+            topSpeed: "155 mph",
+            acceleration: "0-60 in 4.5s",
+            fuelEconomy: "24 MPG",
+            engineSize: "3.0L V6"
+        }
     },
     {
         id: 2,
         image: assets.car2,
-        price: "$25",
-        title: "Mercedes Grand",
+        price: "$120",
+        title: "Range Rover Vogue",
         brand: "RANGE ROVER",
+        year: "2024",
+        seats: "7",
+        transmission: "Automatic",
+        fuel: "Diesel",
+        description: "Unrivaled refinement and capability. The Range Rover Vogue provides a sanctuary of calm while tackling the most challenging terrains with ease.",
+        features: ["All-Wheel Drive", "Panoramic Sunroof", "Pivi Pro Infotainment", "Terrain Response 2"],
+        specs: {
+            topSpeed: "130 mph",
+            acceleration: "0-60 in 6.1s",
+            fuelEconomy: "28 MPG",
+            engineSize: "3.0L 6-Cylinder"
+        }
     },
     {
         id: 3,
         image: assets.car3,
-        price: "$25",
-        title: "Mercedes Grand",
+        price: "$60",
+        title: "Chevrolet Corvette",
         brand: "CHEVROLET",
+        year: "2023",
+        seats: "2",
+        transmission: "Dual-Clutch",
+        fuel: "Petrol",
+        description: "A mid-engine masterpiece that stays true to its racing roots. This Chevrolet offers supercar performance with everyday usability.",
+        features: ["Performance Data Recorder", "Bose Premium Audio", "Z51 Performance Package", "Head-Up Display"],
+        specs: {
+            topSpeed: "194 mph",
+            acceleration: "0-60 in 2.9s",
+            fuelEconomy: "19 MPG",
+            engineSize: "6.2L V8"
+        }
     },
     {
         id: 4,
         image: assets.car4,
-        price: "$25",
-        title: "Mercedes Grand",
+        price: "$95",
+        title: "Mercedes-Benz S-Class",
         brand: "MERCEDES",
+        year: "2024",
+        seats: "5",
+        transmission: "9G-TRONIC",
+        fuel: "Hybrid",
+        description: "The S-Class is the center of the Mercedes-Benz universe. It combines intelligent drive systems with a level of luxury that sets the global standard.",
+        features: ["MBUX Hyperscreen", "Rear-Axle Steering", "Burmester 4D Sound", "Ambient Lighting"],
+        specs: {
+            topSpeed: "155 mph",
+            acceleration: "0-60 in 4.4s",
+            fuelEconomy: "55 MPGe",
+            engineSize: "3.0L Inline-6 Turbo"
+        }
     },
-        {
+    {
         id: 5,
         image: assets.car5,
-        price: "$25",
-        title: "Bhugati Veyron",
-        brand: "Bhugati",
+        price: "$250",
+        title: "Bugatti Chiron",
+        brand: "BUGATTI",
+        year: "2023",
+        seats: "2",
+        transmission: "Automatic",
+        fuel: "Petrol",
+        description: "The fastest, most powerful, and exclusive production super sports car in BUGATTI’s history. A true work of automotive art.",
+        features: ["Carbon Fiber Body", "Titanium Exhaust", "Diamond-membrane Speakers", "Active Aerodynamics"],
+        specs: {
+            topSpeed: "261 mph",
+            acceleration: "0-60 in 2.4s",
+            fuelEconomy: "11 MPG",
+            engineSize: "8.0L W16"
+        }
     },
-        {
+    {
         id: 6,
         image: assets.car6,
-        price: "$25",
-        title: "Honda Civic",
+        price: "$40",
+        title: "Honda Civic Type R",
         brand: "HONDA",
+        year: "2024",
+        seats: "4",
+        transmission: "Manual",
+        fuel: "Petrol",
+        description: "The ultimate high-performance hatchback. Engineering excellence meets aggressive styling for an exhilarating front-wheel-drive experience.",
+        features: ["LogR Datalogger", "Brembo Brakes", "Type R Sport Seats", "Wireless Charging"],
+        specs: {
+            topSpeed: "169 mph",
+            acceleration: "0-60 in 5.2s",
+            fuelEconomy: "25 MPG",
+            engineSize: "2.0L VTEC Turbo"
+        }
     },
-        {
+    {
         id: 7,
         image: assets.car7,
-        price: "$25",
-        title: "Toyota Corolla",
+        price: "$35",
+        title: "Toyota Corolla GR",
         brand: "TOYOTA",
+        year: "2024",
+        seats: "5",
+        transmission: "Manual",
+        fuel: "Petrol",
+        description: "Born from rally racing, the GR Corolla is a wild, triple-exhaust-piped beast that brings excitement to every corner.",
+        features: ["GR-FOUR AWD System", "Circuit Edition Hood", "Torsen Limited Slip", "Toyota Safety Sense"],
+        specs: {
+            topSpeed: "143 mph",
+            acceleration: "0-60 in 4.9s",
+            fuelEconomy: "24 MPG",
+            engineSize: "1.6L 3-Cylinder Turbo"
+        }
     },
-        {
+    {
         id: 8,
         image: assets.car8,
-        price: "$25",
-        title: "Suzuki Swift",
+        price: "$30",
+        title: "Suzuki Swift Sport",
         brand: "SUZUKI",
-    },
+        year: "2023",
+        seats: "5",
+        transmission: "Manual",
+        fuel: "Petrol",
+        description: "A lightweight pocket rocket. The Swift Sport proves that you don't need massive horsepower to have massive amounts of fun.",
+        features: ["Lightweight Chassis", "Sport Suspension", "Smartphone Linkage", "Keyless Entry"],
+        specs: {
+            topSpeed: "130 mph",
+            acceleration: "0-60 in 8.1s",
+            fuelEconomy: "38 MPG",
+            engineSize: "1.4L BoosterJet"
+        }
+    }
 ];

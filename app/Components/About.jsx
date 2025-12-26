@@ -3,8 +3,8 @@ import Image from 'next/image';
 import { assets } from '@/assets/assets';
 
 const About = () => {
-  return (
-    <section className="max-w-7xl mx-auto py-16 px-6 bg-white dark:bg-darkTheme transition-colors duration-300">
+  return ( 
+    <section id="about" className="max-w-7xl mx-auto py-16 px-6 bg-white dark:bg-darkTheme transition-colors duration-300">
       <div className="flex flex-col lg:flex-row items-center lg:items-center gap-10 lg:gap-16">
         
         {/* User Image Wrapper */}
