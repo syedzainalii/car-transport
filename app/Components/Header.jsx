@@ -107,23 +107,23 @@ const Header = ({ isDarkMode }) => {
         </div>
 
         {/* RIGHT SIDE: Booking Form Block */}
-        <div className="bg-white p-6 md:p-8 rounded-sm shadow-2xl w-full max-w-md animate-fadeIn z-20">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Make your trip</h2>
+        <div className="bg-white dark:bg-darkHover p-6 md:p-8 rounded-sm shadow-2xl w-full max-w-md animate-fadeIn z-20">
+          <h2 className="text-2xl dark:text-white font-bold text-gray-800 mb-6">Make your trip</h2>
           
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Pick-up Location</label>
-              <input type="text" placeholder="City, Airport, Station, etc" className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 transition-colors text-gray-800" />
+              <input type="text" placeholder="City, Airport, Station, etc" className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400  dark:text-gray-500 transition-colors text-gray-800" />
             </div>
 
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Drop-off Location</label>
-              <input type="text" placeholder="City, Airport, Station, etc" className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 transition-colors text-gray-800" />
+              <input type="text" placeholder="City, Airport, Station, etc" className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 transition-colors text-gray-800 dark:text-gray-500" />
             </div>
 
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Select Car</label>
-              <select className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none focus:border-orange-400 transition-colors bg-white cursor-pointer">
+              <select className="w-full border border-gray-200 dark:bg-darkHover p-3 text-sm text-gray-500 focus:outline-none focus:border-orange-400 transition-colors bg-white cursor-pointer">
                 <option value="">Choose a Vehicle</option>
                 {carData.map((car) => (
                   <option key={car.id} value={car.title}>
@@ -136,15 +136,15 @@ const Header = ({ isDarkMode }) => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Pick-up Date</label>
-                <input type="date" className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none" />
+                <input type="date" className="w-full border border-gray-200 p-3 text-sm text-gray-500   focus:outline-none dark:[color-scheme:dark]" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Pick-up Time</label>
-                <input type="time" className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none" />
+                <input type="time" className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none dark:[color-scheme:dark]" />
               </div>
             </div>
 
-            <button type="submit" className="w-full bg-white border-2 border-orange-500 text-orange-600 font-bold py-4 mt-2 transition-all duration-300 hover:bg-orange-500 hover:text-white uppercase tracking-widest text-sm shadow-md active:scale-[0.98]">
+            <button type="submit" className="w-full bg-white border-2 border-orange-500 dark:bg-darkHover text-orange-600 font-bold py-4 mt-2 transition-all duration-300 hover:bg-orange-500 hover:text-white uppercase tracking-widest text-sm shadow-md active:scale-[0.98]">
               Book Ride
             </button>
           </form>
