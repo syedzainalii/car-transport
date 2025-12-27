@@ -36,7 +36,7 @@ const Car = () => {
         </h2>
       </div>
 
-      <div className="max-w-7xl mx-auto relative group">
+      <div className="max-w-7xl mx-auto  relative group">
         <Swiper
           modules={[Navigation, Pagination]}
           spaceBetween={24}
@@ -54,7 +54,7 @@ const Car = () => {
         >
           {carData.map((car) => (
             <SwiperSlide key={car.id} className="py-4">
-              <div className="bg-white dark:bg-darkTheme border border-gray-200 dark:border-darkHover rounded-xl overflow-hidden group/card transition-all duration-300 shadow-lg hover:shadow-2xl hover:-translate-y-1">
+              <div className="bg-white dark:bg-darkHover border border-gray-200 dark:border-darkHover rounded-xl overflow-hidden group/card transition-all duration-300 shadow-lg hover:shadow-2xl hover:-translate-y-1">
                 {/* Image Container */}
                 <div className="relative h-48 overflow-hidden">
                   <Image
@@ -110,7 +110,7 @@ const Car = () => {
         </Swiper>
 
         {/* Custom Navigation Arrows */}
-        <button className="button-prev absolute top-[40%] -left-4 lg:-left-6 transform -translate-y-1/2 z-20 bg-white dark:bg-darkTheme border border-gray-200 dark:border-zinc-800 p-3 rounded-full shadow-xl text-gray-600 dark:text-gray-300 hover:bg-orange-500 hover:text-white transition-all disabled:opacity-0 active:scale-90">
+        <button className="button-prev absolute top-[40%] -left-4 lg:-left-6 transform -translate-y-1/2 z-20 bg-white dark:bg-darkHover border border-gray-200 dark:border-zinc-800 p-3 rounded-full shadow-xl text-gray-600 dark:text-gray-300 hover:bg-orange-500 hover:text-white transition-all disabled:opacity-0 active:scale-90">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -123,13 +123,13 @@ const Car = () => {
           </svg>
         </button>
 
-        <button className="button-next absolute top-[40%] -right-4 lg:-right-6 transform -translate-y-1/2 z-20 bg-white dark:bg-darkTheme border border-gray-200 dark:border-zinc-800 p-3 rounded-full shadow-xl text-gray-600 dark:text-gray-300 hover:bg-orange-500 hover:text-white transition-all disabled:opacity-0 active:scale-90">
+        <button className="button-next absolute top-[40%] -right-4 lg:-right-6 transform -translate-y-1/2 z-20 bg-white dark:bg-darkHover border border-gray-200 dark:border-zinc-800 p-3 rounded-full shadow-xl text-gray-600 dark:text-gray-300 hover:bg-orange-500 hover:text-white transition-all disabled:opacity-0 active:scale-90">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={2}
-            stroke="currentColor"
+            stroke="currentColor "
             className="w-5 h-5"
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
