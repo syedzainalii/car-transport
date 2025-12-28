@@ -30,7 +30,7 @@ services:
   # db service
   db:
     container_name: db
-    image: postgres:13
+    image: postgres:17
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

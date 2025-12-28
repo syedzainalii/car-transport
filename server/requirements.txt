@@ -5,3 +5,4 @@ Flask-Mail
 PyJWT
 python-dotenv
 Werkzeug
+psycopg2-binary

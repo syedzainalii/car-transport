@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
-const Navbar = ({ isDarkMode, setIsDarkMode }) => {
+const Navbar = ({ isDarkMode, setIsDarkMode, user, onLogout }) => {
+  const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const sideMenuRef = useRef();
+  const userMenuRef = useRef();
 
   const navLinks = [
     { href: "#top", label: "Home" },
@@ -29,12 +33,37 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
     }
   }, [isMobileMenuOpen]);
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
+  };
+
+  const handleLogout = () => {
+    setShowUserMenu(false);
+    if (onLogout) {
+      onLogout();
+    }
+  };
+
+  const handleDashboard = () => {
+    setShowUserMenu(false);
+    if (user?.role === 'admin' || user?.role === 'moderator') {
+      router.push('/dashboard');
+    }
   };
 
   return (
@@ -56,7 +85,7 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
               className="flex-shrink-0 group"
             >
               <div className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent transition-transform duration-300 group-hover:scale-105">
-                LOGO.
+                Car Transportation
               </div>
             </a>
 
@@ -94,16 +123,122 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
                 )}
               </button>
 
-              {/* Desktop Contact Button */}
-              <a
-                href="#contact"
-                className="hidden lg:flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 active:scale-95 group"
-              >
-                <span>Contact</span>
-                <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </a>
+              {/* User Authentication Section */}
+              {user ? (
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="hidden lg:flex items-center gap-3 px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    {/* User Avatar */}
+                    <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    
+                    {/* User Info */}
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                        {user.name}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                        {user.role}
+                      </p>
+                    </div>
+
+                    {/* Dropdown Arrow */}
+                    <svg 
+                      className={`w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showUserMenu && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50">
+                      {/* User Info in Dropdown */}
+                      <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                        <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                          {user.name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {user.email}
+                        </p>
+                        <span className="inline-block mt-2 px-2 py-1 text-xs rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 capitalize">
+                          {user.role}
+                        </span>
+                      </div>
+
+                      {/* Dashboard Link - Only for admin/moderator */}
+                      {(user.role === 'admin' || user.role === 'moderator') && (
+                        <button
+                          onClick={handleDashboard}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          Dashboard
+                        </button>
+                      )}
+
+                      {/* My Bookings */}
+                      <button
+                        onClick={() => setShowUserMenu(false)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        My Bookings
+                      </button>
+
+                      {/* Profile Settings */}
+                      <button
+                        onClick={() => setShowUserMenu(false)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Profile Settings
+                      </button>
+
+                      {/* Divider */}
+                      <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+
+                      {/* Logout */}
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="hidden lg:flex items-center gap-2">
+                  <button
+                    onClick={() => router.push('/login')}
+                    className="px-5 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => router.push('/register')}
+                    className="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 active:scale-95 text-sm"
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              )}
 
               {/* Mobile Menu Button */}
               <button
@@ -159,6 +294,28 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
             </button>
           </div>
 
+          {/* User Info in Mobile Menu */}
+          {user && (
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center text-white font-bold">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                    {user.name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {user.email}
+                  </p>
+                  <span className="inline-block mt-1 px-2 py-0.5 text-xs rounded-full bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-300 capitalize">
+                    {user.role}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Mobile Menu Links */}
           <nav className="flex-1 px-6 py-8">
             <ul className="space-y-2">
@@ -176,21 +333,84 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
                   </a>
                 </li>
               ))}
+
+              {/* Mobile User Actions */}
+              {user && (
+                <>
+                  {(user.role === 'admin' || user.role === 'moderator') && (
+                    <li>
+                      <button
+                        onClick={() => {
+                          closeMobileMenu();
+                          handleDashboard();
+                        }}
+                        className="w-full text-left px-4 py-3 text-lg font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-gray-800 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg transition-all duration-200"
+                      >
+                        Dashboard
+                      </button>
+                    </li>
+                  )}
+                  <li>
+                    <button
+                      onClick={closeMobileMenu}
+                      className="w-full text-left px-4 py-3 text-lg font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-gray-800 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg transition-all duration-200"
+                    >
+                      My Bookings
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={closeMobileMenu}
+                      className="w-full text-left px-4 py-3 text-lg font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-gray-800 hover:text-orange-600 dark:hover:text-orange-400 rounded-lg transition-all duration-200"
+                    >
+                      Profile Settings
+                    </button>
+                  </li>
+                </>
+              )}
             </ul>
           </nav>
 
           {/* Mobile Menu Footer */}
-          <div className="p-6 border-t border-gray-200 dark:border-gray-800">
-            <a
-              href="#contact"
-              onClick={closeMobileMenu}
-              className="flex items-center justify-center space-x-2 w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300 active:scale-95"
-            >
-              <span>Get in Touch</span>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </a>
+          <div className="p-6 border-t border-gray-200 dark:border-gray-800 space-y-3">
+            {user ? (
+              <button
+                onClick={() => {
+                  closeMobileMenu();
+                  handleLogout();
+                }}
+                className="flex items-center justify-center space-x-2 w-full px-6 py-3 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all duration-300 active:scale-95"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Logout</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    closeMobileMenu();
+                    router.push('/login');
+                  }}
+                  className="w-full px-6 py-3 border-2 border-orange-500 text-orange-500 rounded-lg font-medium hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all duration-300"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => {
+                    closeMobileMenu();
+                    router.push('/register');
+                  }}
+                  className="flex items-center justify-center space-x-2 w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300 active:scale-95"
+                >
+                  <span>Sign Up</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
