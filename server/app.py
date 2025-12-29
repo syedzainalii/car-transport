@@ -11,13 +11,14 @@ from datetime import datetime, UTC, timedelta
 from functools import wraps
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# CORS Configuration - Allow Next.js frontend
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
 CORS(app, resources={
     r"/api/*": {
         "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -27,12 +28,10 @@ CORS(app, resources={
     }
 })
 
-# App Configuration
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:postgres@db:5432/postgres"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Email Configuration
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
 app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
 app.config['MAIL_USE_TLS'] = True
@@ -40,7 +39,6 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME'))
 
-# Initialize extensions
 db = SQLAlchemy(app)
 mail = Mail(app)
 
@@ -55,15 +53,12 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.String(20), default='user', server_default='user') 
+    status = db.Column(db.String(20), default='user', server_default='user')
     is_verified = db.Column(db.Boolean, default=False)
-
-    # --- ADD THESE 4 LINES (The "Step 3" Fix) ---
     verification_code = db.Column(db.String(6), nullable=True)
     code_expires_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
-    # --------------------------------------------
 
     def to_dict(self):
         return {
@@ -75,6 +70,7 @@ class User(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None
         }
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -88,54 +84,56 @@ def send_verification_email(email, code, name):
     try:
         msg = Message(
             subject='Verify Your Email Address',
-            recipients=[email]
-        )
-        msg.html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
-                .code-box {{ background: white; border: 2px dashed #667eea; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }}
-                .code {{ font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #667eea; }}
-                .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #999; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Email Verification</h1>
-                </div>
-                <div class="content">
-                    <h2>Hello, {name}! 👋</h2>
-                    <p>Thank you for registering. Please use the verification code below to verify your email address:</p>
-                    <div class="code-box">
-                        <div class="code">{code}</div>
+            recipients=[email],
+            html=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                              color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                    .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+                    .code-box {{ background: white; border: 2px dashed #667eea; border-radius: 8px; 
+                                 padding: 20px; text-align: center; margin: 20px 0; }}
+                    .code {{ font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #667eea; }}
+                    .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #999; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Email Verification</h1>
                     </div>
-                    <p><strong>Important:</strong> This code will expire in 10 minutes.</p>
-                    <p>If you didn't request this verification, please ignore this email.</p>
+                    <div class="content">
+                        <h2>Hello, {name}! 👋</h2>
+                        <p>Thank you for registering. Please use the verification code below to verify your email address:</p>
+                        <div class="code-box">
+                            <div class="code">{code}</div>
+                        </div>
+                        <p><strong>Important:</strong> This code will expire in 10 minutes.</p>
+                        <p>If you didn't request this verification, please ignore this email.</p>
+                    </div>
+                    <div class="footer">
+                        <p>This is an automated email. Please do not reply.</p>
+                    </div>
                 </div>
-                <div class="footer">
-                    <p>This is an automated email. Please do not reply.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+            </body>
+            </html>
+            """
+        )
         mail.send(msg)
         return True
     except Exception as e:
         print(f"❌ Email Error: {str(e)}")
         return False
 
-def generate_token(user): # Change user_id to user object
+def generate_token(user):
     """Generate JWT token"""
     payload = {
         'user_id': user.id,
-        'status': user.status, # Add this
+        'status': user.status,
         'exp': datetime.utcnow() + timedelta(days=7),
         'iat': datetime.utcnow()
     }
@@ -147,11 +145,10 @@ def token_required(f):
     def decorated(*args, **kwargs):
         token = None
         
-        # Get token from Authorization header
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
             try:
-                token = auth_header.split(' ')[1]  # Bearer <token>
+                token = auth_header.split(' ')[1]
             except IndexError:
                 return jsonify({'success': False, 'message': 'Invalid token format'}), 401
         
@@ -159,7 +156,6 @@ def token_required(f):
             return jsonify({'success': False, 'message': 'Token is missing'}), 401
         
         try:
-            # Decode token
             payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
             current_user = User.query.get(payload['user_id'])
             
@@ -173,7 +169,7 @@ def token_required(f):
             return jsonify({'success': False, 'message': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'success': False, 'message': 'Invalid token'}), 401
-        except Exception as e:
+        except Exception:
             return jsonify({'success': False, 'message': 'Authentication failed'}), 401
         
         return f(current_user, *args, **kwargs)
@@ -181,7 +177,7 @@ def token_required(f):
     return decorated
 
 # ============================================================================
-# ROUTES
+# PUBLIC ROUTES
 # ============================================================================
 
 @app.route('/', methods=['GET'])
@@ -223,7 +219,6 @@ def register():
     try:
         data = request.get_json()
         
-        # Validate input
         if not data:
             return jsonify({'success': False, 'message': 'No data provided'}), 400
         
@@ -231,33 +226,30 @@ def register():
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
         
-        if not name or not email or not password:
+        if not all([name, email, password]):
             return jsonify({'success': False, 'message': 'Name, email, and password are required'}), 400
         
         if len(password) < 6:
             return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400
         
-        # Check if user already exists
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
             if existing_user.is_verified:
                 return jsonify({'success': False, 'message': 'Email already registered'}), 409
-            else:
-                # User registered but not verified - resend code
-                verification_code = generate_verification_code()
-                existing_user.verification_code = verification_code
-                existing_user.code_expires_at = datetime.utcnow() + timedelta(minutes=10)
-                db.session.commit()
-                
-                send_verification_email(email, verification_code, name)
-                
-                return jsonify({
-                    'success': True,
-                    'message': 'Verification code sent to your email',
-                    'email': email
-                }), 200
+            
+            verification_code = generate_verification_code()
+            existing_user.verification_code = verification_code
+            existing_user.code_expires_at = datetime.utcnow() + timedelta(minutes=10)
+            db.session.commit()
+            
+            send_verification_email(email, verification_code, name)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Verification code sent to your email',
+                'email': email
+            }), 200
         
-        # Create new user
         verification_code = generate_verification_code()
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
         
@@ -272,7 +264,6 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         
-        # Send verification email
         email_sent = send_verification_email(email, verification_code, name)
         
         return jsonify({
@@ -302,7 +293,6 @@ def verify_email():
         if not email or not code:
             return jsonify({'success': False, 'message': 'Email and verification code are required'}), 400
         
-        # Find user
         user = User.query.filter_by(email=email).first()
         
         if not user:
@@ -311,22 +301,18 @@ def verify_email():
         if user.is_verified:
             return jsonify({'success': False, 'message': 'Email already verified'}), 400
         
-        # Check if code expired
         if not user.code_expires_at or user.code_expires_at < datetime.utcnow():
             return jsonify({'success': False, 'message': 'Verification code has expired'}), 400
         
-        # Verify code
         if user.verification_code != code:
             return jsonify({'success': False, 'message': 'Invalid verification code'}), 400
         
-        # Mark as verified
         user.is_verified = True
         user.verification_code = None
         user.code_expires_at = None
         user.last_login = datetime.utcnow()
         db.session.commit()
         
-        # Generate token
         token = generate_token(user)
         
         return jsonify({
@@ -363,13 +349,11 @@ def resend_code():
         if user.is_verified:
             return jsonify({'success': False, 'message': 'Email already verified'}), 400
         
-        # Generate new code
         verification_code = generate_verification_code()
         user.verification_code = verification_code
         user.code_expires_at = datetime.utcnow() + timedelta(minutes=10)
         db.session.commit()
         
-        # Send email
         email_sent = send_verification_email(email, verification_code, user.name)
         
         if email_sent:
@@ -397,13 +381,11 @@ def login():
         if not email or not password:
             return jsonify({'success': False, 'message': 'Email and password are required'}), 400
         
-        # Find user
         user = User.query.filter_by(email=email).first()
         
         if not user or not check_password_hash(user.password, password):
             return jsonify({'success': False, 'message': 'Invalid email or password'}), 401
         
-        # Check if verified
         if not user.is_verified:
             return jsonify({
                 'success': False,
@@ -411,11 +393,9 @@ def login():
                 'email_verified': False
             }), 403
         
-        # Update last login
         user.last_login = datetime.utcnow()
         db.session.commit()
         
-        # Generate token
         token = generate_token(user)
         
         return jsonify({

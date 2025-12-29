@@ -63,14 +63,23 @@ export default function LoginPage() {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
+        // Debug logs
+        console.log('Login successful!');
+        console.log('User data:', data.user);
+        console.log('User role:', data.user.role);
+        
         // Redirect based on role
         const userRole = data.user.role;
         
+        console.log('Redirecting based on role:', userRole);
+        
         if (userRole === 'admin' || userRole === 'moderator') {
           // Admin and Moderator go to dashboard
+          console.log('Redirecting to dashboard...');
           router.push('/dashboard');
         } else {
           // Regular users go to home page
+          console.log('Redirecting to home page...');
           router.push('/');
         }
       } else {

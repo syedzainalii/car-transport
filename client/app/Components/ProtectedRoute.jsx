@@ -12,26 +12,37 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
 
+      console.log('ProtectedRoute - Checking auth...');
+      console.log('Required role:', requiredRole);
+      console.log('Token exists:', !!token);
+      console.log('User data exists:', !!userData);
+
       // No token - redirect to login
       if (!token || !userData) {
+        console.log('ProtectedRoute - No auth, redirecting to login');
         router.push('/login');
         return;
       }
 
       try {
         const user = JSON.parse(userData);
+        console.log('ProtectedRoute - User role:', user.role);
 
         // Check role if required
         if (requiredRole) {
           if (Array.isArray(requiredRole)) {
             // Multiple roles allowed (e.g., ['admin', 'moderator'])
+            console.log('ProtectedRoute - Checking against array:', requiredRole);
             if (!requiredRole.includes(user.role)) {
+              console.log('ProtectedRoute - Role not in array, redirecting to /');
               router.push('/');
               return;
             }
           } else {
             // Single role required (e.g., 'admin')
+            console.log('ProtectedRoute - Checking against single role:', requiredRole);
             if (user.role !== requiredRole) {
+              console.log('ProtectedRoute - Role mismatch, redirecting to /');
               router.push('/');
               return;
             }
@@ -39,10 +50,11 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
         }
 
         // Authorized - show content
+        console.log('ProtectedRoute - User authorized!');
         setIsAuthorized(true);
         setIsLoading(false);
       } catch (err) {
-        console.error('Auth error:', err);
+        console.error('ProtectedRoute - Auth error:', err);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         router.push('/login');
