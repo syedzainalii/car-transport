@@ -11,7 +11,7 @@ function getToken() {
 }
 
 /**
- * Make authenticated API request
+ * Make authenticated API request (JSON)
  */
 async function apiRequest(endpoint, options = {}) {
   const token = getToken();
@@ -30,52 +30,87 @@ async function apiRequest(endpoint, options = {}) {
       headers,
     });
 
-    // Check if response is ok before trying to parse JSON
     if (!response.ok) {
-      // Try to parse error message from JSON response
       let errorMessage = 'API request failed';
       try {
         const errorData = await response.json();
         errorMessage = errorData.message || errorMessage;
-      } catch (e) {
-        // If response is not JSON, use status text
+      } catch {
         errorMessage = response.statusText || `HTTP ${response.status}`;
       }
       throw new Error(errorMessage);
     }
 
-    // Parse JSON response
-    const data = await response.json();
-    return data;
+    return await response.json();
   } catch (error) {
-    // Handle network errors or other fetch errors
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Network error: Unable to connect to server. Please check if the backend is running.');
+    if (error instanceof TypeError) {
+      throw new Error(
+        'Network error: Unable to connect to server. Please check if the backend is running.'
+      );
     }
-    // Re-throw other errors (including our custom Error from above)
     throw error;
   }
 }
 
-// User endpoints
+/**
+ * Make authenticated API request with FormData (file uploads)
+ */
+async function formDataRequest(endpoint, options = {}) {
+  const token = getToken();
+  const headers = {
+    ...options.headers,
+  };
+
+  // DO NOT set Content-Type for FormData
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch {
+        errorMessage = response.statusText || `HTTP ${response.status}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        'Network error: Unable to connect to server. Please check if the backend is running.'
+      );
+    }
+    throw error;
+  }
+}
+
+/* ===================== APIs ===================== */
+
+// Users
 export const userAPI = {
   getAll: () => apiRequest('/api/users'),
-  updateRole: (userId, role) => 
+  updateRole: (userId, role) =>
     apiRequest(`/api/users/${userId}/role`, {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     }),
 };
 
-// Booking endpoints
+// Bookings
 export const bookingAPI = {
   getAll: (filters = {}) => {
-    const params = new URLSearchParams();
-    if (filters.status) params.append('status', filters.status);
-    if (filters.from) params.append('from', filters.from);
-    if (filters.to) params.append('to', filters.to);
-    const query = params.toString();
-    return apiRequest(`/api/bookings${query ? `?${query}` : ''}`);
+    const params = new URLSearchParams(filters).toString();
+    return apiRequest(`/api/bookings${params ? `?${params}` : ''}`);
   },
   updateStatus: (bookingId, status) =>
     apiRequest(`/api/bookings/${bookingId}/status`, {
@@ -84,53 +119,53 @@ export const bookingAPI = {
     }),
 };
 
-// Content endpoints
+// Content
 export const contentAPI = {
-  getAll: (key = null) => {
-    const query = key ? `?key=${key}` : '';
-    return apiRequest(`/api/content${query}`);
-  },
+  getAll: (key = null) =>
+    apiRequest(`/api/content${key ? `?key=${key}` : ''}`),
   create: (data) =>
     apiRequest('/api/content', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  update: (blockId, data) =>
-    apiRequest(`/api/content/${blockId}`, {
+  update: (id, data) =>
+    apiRequest(`/api/content/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
 };
 
-// Dashboard endpoints
+// Dashboard
 export const dashboardAPI = {
   getSummary: () => apiRequest('/api/dashboard/summary'),
-  getCharts: (range = '7d') => apiRequest(`/api/dashboard/charts?range=${range}`),
+  getCharts: (range = '7d') =>
+    apiRequest(`/api/dashboard/charts?range=${range}`),
 };
 
-// Car endpoints
+// Cars (FormData)
 export const carAPI = {
-  getAll: (activeOnly = true) => {
-    const query = activeOnly ? '?active=true' : '';
-    return apiRequest(`/api/cars${query}`);
-  },
-  create: (data) =>
-    apiRequest('/api/cars', {
+  getAll: (activeOnly = true) =>
+    apiRequest(`/api/cars${activeOnly ? '?active=true' : ''}`),
+
+  create: (formData) =>
+    formDataRequest('/api/cars', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: formData,
     }),
-  update: (carId, data) =>
-    apiRequest(`/api/cars/${carId}`, {
+
+  update: (carId, formData) =>
+    formDataRequest(`/api/cars/${carId}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: formData,
     }),
+
   delete: (carId) =>
     apiRequest(`/api/cars/${carId}`, {
       method: 'DELETE',
     }),
 };
 
-// Booking creation endpoint
+// Booking creation
 export const bookingCreateAPI = {
   create: (data) =>
     apiRequest('/api/bookings', {
@@ -138,4 +173,3 @@ export const bookingCreateAPI = {
       body: JSON.stringify(data),
     }),
 };
-

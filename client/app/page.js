@@ -57,14 +57,10 @@ export default function Home() {
       console.log('Home page - Parsed user:', parsedUser);
       console.log('Home page - User role:', parsedUser.role);
       
-      // Redirect admins/moderators to dashboard
-      if (parsedUser.role === 'admin' || parsedUser.role === 'moderator') {
-        console.log('Admin/Moderator detected, redirecting to dashboard');
-        router.replace('/dashboard'); // Use replace instead of push
-        return;
-      }
+      // REMOVED: Auto-redirect for admins/moderators
+      // Now admins can view the home page too!
       
-      console.log('Regular user, showing home page');
+      console.log('User authenticated, showing home page');
       setUser(parsedUser);
       setLoading(false);
     } catch (err) {

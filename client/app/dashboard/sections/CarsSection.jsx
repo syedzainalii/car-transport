@@ -2,7 +2,10 @@
 import { useEffect, useState } from 'react';
 import DataTable from '@/app/Components/admin/DataTable';
 import { carAPI } from '@/app/lib/api';
-import { carData } from '@/assets/assets';
+
+// CONFIGURATION: Replace this with your actual backend URL
+// If you are using Laravel/Express locally, it is usually http://localhost:8000 or http://localhost:5000
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function CarsSection() {
   const [cars, setCars] = useState([]);
@@ -20,13 +23,33 @@ export default function CarsSection() {
     brand: '',
     details: '',
     is_active: true,
-    image: null,       // FILE
-    preview: '',       // PREVIEW URL / BASE64
+    image: null,      // FILE OBJECT
+    preview: '',      // PREVIEW URL / BASE64
   });
 
   useEffect(() => {
     loadCars();
   }, []);
+
+  // --- HELPER: Resolve Image URL ---
+  const getImageUrl = (path) => {
+    if (!path) return 'https://via.placeholder.com/150?text=No+Image'; // Fallback
+    
+    // 1. If it's a Base64 string or Blob (Offline mode / Preview)
+    if (path.startsWith('data:') || path.startsWith('blob:')) {
+      return path;
+    }
+    
+    // 2. If it's an absolute URL (External source like S3/Cloudinary)
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+
+    // 3. If it's a relative path from Backend (e.g., /uploads/car.jpg)
+    // We append the Backend URL
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${API_BASE_URL}${cleanPath}`;
+  };
 
   const loadCars = async () => {
     try {
@@ -35,10 +58,10 @@ export default function CarsSection() {
       setCars(data.cars || []);
       setOffline(false);
     } catch (err) {
-      setError('Backend unavailable — using local data');
+      setError('Backend unavailable');
       setOffline(true);
       const local = localStorage.getItem('localCars');
-      setCars(local ? JSON.parse(local) : carData || []);
+      setCars(local ? JSON.parse(local) : []);
     } finally {
       setLoading(false);
     }
@@ -65,7 +88,8 @@ export default function CarsSection() {
       details: car.details || '',
       is_active: car.is_active ?? true,
       image: null,
-      preview: car.image_url || '',
+      // Use helper to show current image in modal properly
+      preview: getImageUrl(car.image_url), 
     });
     setShowEditModal(true);
   };
@@ -97,7 +121,7 @@ export default function CarsSection() {
         let updated = [...cars];
         const carDataLocal = {
           ...formData,
-          image_url: formData.preview,
+          image_url: formData.preview, // Save Base64 for offline viewing
         };
 
         delete carDataLocal.image;
@@ -119,7 +143,8 @@ export default function CarsSection() {
         payload.append('name', formData.name);
         payload.append('brand', formData.brand);
         payload.append('details', formData.details);
-        payload.append('is_active', formData.is_active);
+        // Ensure boolean is sent correctly (some backends prefer 1/0)
+        payload.append('is_active', formData.is_active ? '1' : '0'); 
 
         if (formData.image) {
           payload.append('image', formData.image);
@@ -138,7 +163,8 @@ export default function CarsSection() {
       setShowEditModal(false);
       setEditingCar(null);
     } catch (err) {
-      alert('Failed to save car');
+      console.error('Error saving car:', err);
+      alert(`Failed to save car: ${err.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
@@ -167,9 +193,14 @@ export default function CarsSection() {
       header: 'Image',
       render: (car) => (
         <img
-          src={car.image_url}
-          className="w-20 h-20 object-cover rounded-lg"
+          src={getImageUrl(car.image_url)}
+          className="w-20 h-20 object-cover rounded-lg border border-gray-200"
           alt={car.name}
+          // Fallback if image fails to load
+          onError={(e) => {
+            e.target.onerror = null; 
+            e.target.src = 'https://via.placeholder.com/150?text=No+Image';
+          }}
         />
       ),
     },
@@ -178,7 +209,7 @@ export default function CarsSection() {
     {
       header: 'Status',
       render: (car) => (
-        <span className={car.is_active ? 'text-green-600' : 'text-gray-400'}>
+        <span className={`px-2 py-1 rounded text-sm ${car.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
           {car.is_active ? 'Active' : 'Inactive'}
         </span>
       ),
@@ -187,13 +218,13 @@ export default function CarsSection() {
 
   const actions = (car) => (
     <div className="flex gap-2">
-      <button onClick={() => handleEdit(car)} className="btn-blue">Edit</button>
+      <button onClick={() => handleEdit(car)} className="btn-blue text-sm px-3 py-1">Edit</button>
       <button
         onClick={() => handleDelete(car.id)}
         disabled={deletingCarId === car.id}
-        className="btn-red"
+        className="btn-red text-sm px-3 py-1"
       >
-        Delete
+        {deletingCarId === car.id ? '...' : 'Delete'}
       </button>
     </div>
   );
@@ -203,63 +234,90 @@ export default function CarsSection() {
     if (!open) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-xl">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl">
           <h3 className="text-xl font-bold mb-4">
-            {isCreate ? 'Add Car' : 'Edit Car'}
+            {isCreate ? 'Add New Car' : 'Edit Car'}
           </h3>
 
-          <input
-            className="input"
-            placeholder="Car Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Name</label>
+              <input
+                className="input w-full border rounded p-2"
+                placeholder="Car Name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
 
-          <input
-            className="input"
-            placeholder="Brand"
-            value={formData.brand}
-            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-          />
+            <div>
+              <label className="block text-sm font-medium mb-1">Brand</label>
+              <input
+                className="input w-full border rounded p-2"
+                placeholder="Brand"
+                value={formData.brand}
+                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+              />
+            </div>
 
-          <textarea
-            className="input"
-            placeholder="Details"
-            value={formData.details}
-            onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-          />
+            <div>
+              <label className="block text-sm font-medium mb-1">Details</label>
+              <textarea
+                className="input w-full border rounded p-2"
+                placeholder="Details"
+                rows={3}
+                value={formData.details}
+                onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+              />
+            </div>
 
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => handleImageChange(e.target.files[0])}
-          />
+            <div>
+              <label className="block text-sm font-medium mb-1">Image</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleImageChange(e.target.files[0])}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              {formData.preview && (
+                <div className="mt-2">
+                   <p className="text-xs text-gray-500 mb-1">Preview:</p>
+                   <img
+                    src={formData.preview}
+                    className="w-full h-40 object-contain bg-gray-50 rounded border"
+                    alt="Preview"
+                  />
+                </div>
+              )}
+            </div>
 
-          {formData.preview && (
-            <img
-              src={formData.preview}
-              className="w-32 h-32 object-cover rounded mt-2"
-            />
-          )}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4"
+                checked={formData.is_active}
+                onChange={(e) =>
+                  setFormData({ ...formData, is_active: e.target.checked })
+                }
+              />
+              <span className="text-sm font-medium">Active Status</span>
+            </label>
+          </div>
 
-          <label className="flex gap-2 mt-3">
-            <input
-              type="checkbox"
-              checked={formData.is_active}
-              onChange={(e) =>
-                setFormData({ ...formData, is_active: e.target.checked })
-              }
-            />
-            Active
-          </label>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <button onClick={() => (isCreate ? setShowCreateModal(false) : setShowEditModal(false))}>
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+            <button 
+              onClick={() => (isCreate ? setShowCreateModal(false) : setShowEditModal(false))}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            >
               Cancel
             </button>
-            <button onClick={handleSave} disabled={saving} className="btn-blue">
-              {saving ? 'Saving...' : 'Save'}
+            <button 
+              onClick={handleSave} 
+              disabled={saving} 
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>
@@ -268,10 +326,18 @@ export default function CarsSection() {
   };
 
   return (
-    <>
-      <div className="flex justify-between mb-4">
-        <h2 className="text-2xl font-bold">Cars Management</h2>
-        <button onClick={handleCreate} className="btn-blue">+ Add Car</button>
+    <div className="p-4">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-bold">Cars Management</h2>
+          {offline && <span className="text-xs text-red-500 font-semibold">⚠ Offline Mode</span>}
+        </div>
+        <button 
+          onClick={handleCreate} 
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+        >
+          + Add Car
+        </button>
       </div>
 
       <DataTable
@@ -283,6 +349,6 @@ export default function CarsSection() {
 
       {renderModal(true)}
       {renderModal(false)}
-    </>
+    </div>
   );
 }

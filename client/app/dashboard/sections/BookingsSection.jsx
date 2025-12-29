@@ -56,6 +56,8 @@ export default function BookingsSection() {
     }
   };
 
+
+
   const columns = [
     {
       header: 'User',
@@ -86,13 +88,6 @@ export default function BookingsSection() {
       accessor: 'car_type',
       render: (booking) => (
         <span className="text-gray-600 dark:text-gray-400">{booking.car_type}</span>
-      ),
-    },
-    {
-      header: 'Price',
-      accessor: 'price',
-      render: (booking) => (
-        <span className="font-semibold text-gray-800 dark:text-white">${booking.price?.toFixed(2) || '0.00'}</span>
       ),
     },
     {

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_mail import Mail, Message
@@ -84,7 +84,6 @@ class Booking(db.Model):
     pickup_location = db.Column(db.String(200), nullable=False)
     dropoff_location = db.Column(db.String(200), nullable=False)
     car_type = db.Column(db.String(50), nullable=False)
-    price = db.Column(db.Numeric(10, 2), nullable=False)
     status = db.Column(db.String(20), default='pending', server_default='pending')  # pending, confirmed, completed, cancelled
     ride_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -99,13 +98,36 @@ class Booking(db.Model):
             'pickup_location': self.pickup_location,
             'dropoff_location': self.dropoff_location,
             'car_type': self.car_type,
-            'price': float(self.price) if self.price else 0.0,
             'status': self.status,
             'ride_date': self.ride_date.isoformat() if self.ride_date else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
+
+class Car(db.Model):
+    __tablename__ = 'cars'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    brand = db.Column(db.String(100), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'brand': self.brand,
+            'details': self.details,
+            'image_url': self.image_url,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
 
 class ContentBlock(db.Model):
     __tablename__ = 'content_blocks'
@@ -596,40 +618,138 @@ def update_user_role(current_user, user_id):
         print(f"❌ Update Role Error: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to update user role'}), 500
 
+# ============================================================================
+# PROFILE SETTING ENDPOINTS
+# ============================================================================
+
+@app.route('/api/users/profile', methods=['PUT'])
+@token_required
+def update_profile(current_user):
+    """Update user profile - Authenticated users only"""
+    try:
+        data = request.get_json()
+        
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return jsonify({'success': False, 'message': 'Name is required'}), 400
+        
+        current_user.name = name
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Profile updated successfully',
+            'user': current_user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Update Profile Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to update profile'}), 500
+
+
+@app.route('/api/users/change-password', methods=['PUT'])
+@token_required
+def change_password(current_user):
+    """Change user password - Authenticated users only"""
+    try:
+        data = request.get_json()
+        
+        current_password = data.get('current_password', '')
+        new_password = data.get('new_password', '')
+        
+        if not current_password or not new_password:
+            return jsonify({'success': False, 'message': 'Both passwords are required'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'message': 'New password must be at least 6 characters'}), 400
+        
+        # Verify current password
+        if not check_password_hash(current_user.password, current_password):
+            return jsonify({'success': False, 'message': 'Current password is incorrect'}), 401
+        
+        # Update password
+        current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Password changed successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Change Password Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to change password'}), 500
+
 
 # ============================================================================
 # BOOKING ENDPOINTS
 # ============================================================================
 
-@app.route('/api/bookings', methods=['GET'])
-@role_required(['admin', 'moderator'])
-def get_bookings(current_user):
-    """Get all bookings with optional filters - Admin/Moderator only"""
+@app.route('/api/bookings', methods=['POST'])
+@token_required
+def create_booking(current_user):
+    """Create a new booking - Authenticated users only"""
     try:
-        status_filter = request.args.get('status')
-        date_from = request.args.get('from')
-        date_to = request.args.get('to')
+        data = request.get_json()
         
-        query = Booking.query
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
         
-        if status_filter:
-            query = query.filter_by(status=status_filter)
+        pickup_location = data.get('pickup_location', '').strip()
+        dropoff_location = data.get('dropoff_location', '').strip()
+        car_type = data.get('car_type', '').strip()
+        ride_date = data.get('ride_date')
         
-        if date_from:
+        # Validate required fields
+        if not all([pickup_location, dropoff_location, car_type]):
+            return jsonify({
+                'success': False,
+                'message': 'Pickup location, dropoff location, and car type are required'
+            }), 400
+        
+        
+        # Parse ride_date if provided
+        ride_date_obj = None
+        if ride_date:
             try:
-                from_date = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-                query = query.filter(Booking.created_at >= from_date)
+                ride_date_obj = datetime.fromisoformat(ride_date.replace('Z', '+00:00'))
             except ValueError:
-                pass
+                return jsonify({'success': False, 'message': 'Invalid date format'}), 400
         
-        if date_to:
-            try:
-                to_date = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-                query = query.filter(Booking.created_at <= to_date)
-            except ValueError:
-                pass
+        # Create new booking
+        new_booking = Booking(
+            user_id=current_user.id,
+            pickup_location=pickup_location,
+            dropoff_location=dropoff_location,
+            car_type=car_type,
+            ride_date=ride_date_obj,
+            status='pending'
+        )
         
-        bookings = query.order_by(Booking.created_at.desc()).all()
+        db.session.add(new_booking)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Booking created successfully',
+            'booking': new_booking.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Create Booking Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to create booking'}), 500
+
+
+@app.route('/api/bookings/my-bookings', methods=['GET'])
+@token_required
+def get_my_bookings(current_user):
+    """Get current user's bookings - Authenticated users only"""
+    try:
+        bookings = Booking.query.filter_by(user_id=current_user.id).order_by(Booking.created_at.desc()).all()
         bookings_list = [booking.to_dict() for booking in bookings]
         
         return jsonify({
@@ -638,44 +758,160 @@ def get_bookings(current_user):
         }), 200
         
     except Exception as e:
-        print(f"❌ Get Bookings Error: {str(e)}")
+        print(f"❌ Get My Bookings Error: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to fetch bookings'}), 500
 
 
-@app.route('/api/bookings/<int:booking_id>/status', methods=['PATCH'])
-@role_required(['admin', 'moderator'])
-def update_booking_status(current_user, booking_id):
-    """Update booking status - Admin/Moderator only"""
+# ============================================================================
+# CAR MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.route('/api/cars', methods=['GET'])
+def get_cars():
+    """Get all cars (public endpoint, optionally filter by active status)"""
     try:
-        data = request.get_json()
-        new_status = data.get('status', '').strip().lower()
+        active_only = request.args.get('active', 'false').lower() == 'true'
         
-        valid_statuses = ['pending', 'confirmed', 'completed', 'cancelled']
-        if new_status not in valid_statuses:
-            return jsonify({
-                'success': False,
-                'message': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
-            }), 400
+        query = Car.query
+        if active_only:
+            query = query.filter_by(is_active=True)
         
-        booking = Booking.query.get(booking_id)
-        if not booking:
-            return jsonify({'success': False, 'message': 'Booking not found'}), 404
+        cars = query.order_by(Car.created_at.desc()).all()
+        cars_list = [car.to_dict() for car in cars]
         
-        booking.status = new_status
-        booking.updated_at = datetime.utcnow()
+        return jsonify({
+            'success': True,
+            'cars': cars_list
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Get Cars Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to fetch cars'}), 500
+
+
+@app.route('/api/cars', methods=['POST'])
+@role_required(['admin', 'moderator'])
+def create_car(current_user):
+    """Create a new car - Admin/Moderator only"""
+    try:
+        name = request.form.get('name', '').strip()
+        brand = request.form.get('brand', '').strip()
+        details = request.form.get('details', '').strip()
+        
+        # FIX: Check for 'true' OR '1' (since React sends '1')
+        is_active_raw = request.form.get('is_active', 'true').lower()
+        is_active = is_active_raw in ['true', '1']
+        
+        if not name:
+            return jsonify({'success': False, 'message': 'Car name is required'}), 400
+        
+        image_url = None
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename:
+                # Ensure directory exists
+                os.makedirs(os.path.join('uploads', 'cars'), exist_ok=True)
+                # Save image and generate URL
+                filename = f"car_{datetime.utcnow().timestamp()}_{file.filename}"
+                file.save(os.path.join('uploads', 'cars', filename))
+                image_url = f"/uploads/cars/{filename}"
+        
+        car = Car(
+            name=name,
+            brand=brand,
+            details=details,
+            image_url=image_url,
+            is_active=is_active
+        )
+        
+        db.session.add(car)
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': f'Booking status updated to {new_status}',
-            'booking': booking.to_dict()
+            'message': 'Car created successfully',
+            'car': car.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Create Car Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to create car'}), 500
+
+
+@app.route('/api/cars/<int:car_id>', methods=['PUT'])
+@role_required(['admin', 'moderator'])
+def update_car(current_user, car_id):
+    """Update a car - Admin/Moderator only"""
+    try:
+        car = Car.query.get(car_id)
+        if not car:
+            return jsonify({'success': False, 'message': 'Car not found'}), 404
+        
+        if 'name' in request.form:
+            car.name = request.form.get('name', '').strip()
+        if 'brand' in request.form:
+            car.brand = request.form.get('brand', '').strip()
+        if 'details' in request.form:
+            car.details = request.form.get('details', '').strip()
+        
+        # FIX: Properly handle the is_active toggle
+        if 'is_active' in request.form:
+            is_active_raw = request.form.get('is_active', '').lower()
+            car.is_active = is_active_raw in ['true', '1']
+        
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename:
+                os.makedirs(os.path.join('uploads', 'cars'), exist_ok=True)
+                filename = f"car_{datetime.utcnow().timestamp()}_{file.filename}"
+                file.save(os.path.join('uploads', 'cars', filename))
+                car.image_url = f"/uploads/cars/{filename}"
+        
+        car.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Car updated successfully',
+            'car': car.to_dict()
         }), 200
         
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Update Booking Status Error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Failed to update booking status'}), 500
+        print(f"❌ Update Car Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to update car'}), 500
 
+
+@app.route('/api/cars/<int:car_id>', methods=['DELETE'])
+@role_required(['admin', 'moderator'])
+def delete_car(current_user, car_id):
+    """Delete a car - Admin/Moderator only"""
+    try:
+        car = Car.query.get(car_id)
+        if not car:
+            return jsonify({'success': False, 'message': 'Car not found'}), 404
+        
+        db.session.delete(car)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Car deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Delete Car Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to delete car'}), 500
+
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    """Serve uploaded files from the uploads directory"""
+    # Using absolute path to avoid directory confusion
+    uploads_dir = os.path.abspath(os.path.join(os.getcwd(), 'uploads'))
+    return send_from_directory(uploads_dir, filename)
 
 # ============================================================================
 # CONTENT MANAGEMENT ENDPOINTS

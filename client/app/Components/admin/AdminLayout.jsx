@@ -21,6 +21,24 @@ export default function AdminLayout({ children, currentUser, activeTab, onTabCha
     router.push('/login');
   };
 
+  const goToWebsite = () => {
+    try {
+      // Clear any React cache and force full reload
+      router.refresh();
+      router.push('/');
+      // Fallback to hard navigation after a brief delay
+      setTimeout(() => {
+        if (window.location.pathname !== '/') {
+          window.location.href = '/';
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Force hard navigation as fallback
+      window.location.href = '/';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Top Navigation Bar */}
@@ -35,14 +53,7 @@ export default function AdminLayout({ children, currentUser, activeTab, onTabCha
             
             <div className="flex items-center gap-4">
               <button
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    // Use full navigation to ensure root app loads with current localStorage
-                    window.location.href = '/';
-                  } else {
-                    router.push('/');
-                  }
-                }}
+                onClick={goToWebsite}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,4 +123,3 @@ export default function AdminLayout({ children, currentUser, activeTab, onTabCha
     </div>
   );
 }
-
