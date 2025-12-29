@@ -60,15 +60,78 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
 
+    # Relationships
+    bookings = db.relationship('Booking', backref='user', lazy=True, cascade='all, delete-orphan')
+
     def to_dict(self):
         return {
             'id': self.id,
             'name': self.name,
             'email': self.email,
             'status': self.status,
+            'role': self.status,  # Alias for frontend compatibility
             'is_verified': self.is_verified,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None
+        }
+
+
+class Booking(db.Model):
+    __tablename__ = 'bookings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    pickup_location = db.Column(db.String(200), nullable=False)
+    dropoff_location = db.Column(db.String(200), nullable=False)
+    car_type = db.Column(db.String(50), nullable=False)
+    price = db.Column(db.Numeric(10, 2), nullable=False)
+    status = db.Column(db.String(20), default='pending', server_default='pending')  # pending, confirmed, completed, cancelled
+    ride_date = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'user_name': self.user.name if self.user else None,
+            'user_email': self.user.email if self.user else None,
+            'pickup_location': self.pickup_location,
+            'dropoff_location': self.dropoff_location,
+            'car_type': self.car_type,
+            'price': float(self.price) if self.price else 0.0,
+            'status': self.status,
+            'ride_date': self.ride_date.isoformat() if self.ride_date else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class ContentBlock(db.Model):
+    __tablename__ = 'content_blocks'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False, index=True)  # e.g., 'hero_title', 'about_text'
+    title = db.Column(db.String(200), nullable=True)
+    content = db.Column(db.Text, nullable=True)  # HTML or plain text content
+    media_url = db.Column(db.String(500), nullable=True)  # Image/video URL
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    updater = db.relationship('User', foreign_keys=[updated_by], lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'key': self.key,
+            'title': self.title,
+            'content': self.content,
+            'media_url': self.media_url,
+            'updated_by': self.updated_by,
+            'updated_by_name': self.updater.name if self.updater else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 # ============================================================================
@@ -176,6 +239,22 @@ def token_required(f):
     
     return decorated
 
+
+def role_required(allowed_roles):
+    """Decorator to require specific roles (admin/moderator)"""
+    def decorator(f):
+        @wraps(f)
+        @token_required
+        def decorated(current_user, *args, **kwargs):
+            if current_user.status not in allowed_roles:
+                return jsonify({
+                    'success': False,
+                    'message': f'Access denied. Required roles: {", ".join(allowed_roles)}'
+                }), 403
+            return f(current_user, *args, **kwargs)
+        return decorated
+    return decorator
+
 # ============================================================================
 # PUBLIC ROUTES
 # ============================================================================
@@ -208,6 +287,32 @@ def health():
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat()
     }), 200
+
+@app.route('/api/public/content', methods=['GET'])
+def get_public_content():
+    """Get content blocks for public website display"""
+    try:
+        key_filter = request.args.get('key')
+        
+        query = ContentBlock.query
+        if key_filter:
+            query = query.filter_by(key=key_filter)
+        
+        content_blocks = query.order_by(ContentBlock.key).all()
+        blocks_dict = {block.key: {
+            'title': block.title,
+            'content': block.content,
+            'media_url': block.media_url
+        } for block in content_blocks}
+        
+        return jsonify({
+            'success': True,
+            'content': blocks_dict
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Get Public Content Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to fetch content'}), 500
 
 # ============================================================================
 # AUTHENTICATION ENDPOINTS
@@ -431,6 +536,389 @@ def dashboard(current_user):
     except Exception as e:
         print(f"❌ Dashboard Error: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to load dashboard'}), 500
+
+@app.route('/api/users', methods=['GET'])
+@role_required(['admin', 'moderator'])
+def get_users(current_user):
+    """Get all users - Protected route (admin/moderator only)"""
+    try:
+        users = User.query.all()
+        users_list = [user.to_dict() for user in users]
+        
+        return jsonify({
+            'success': True,
+            'users': users_list
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Get Users Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to fetch users'}), 500
+
+
+@app.route('/api/users/<int:user_id>/role', methods=['PATCH'])
+@role_required(['admin'])
+def update_user_role(current_user, user_id):
+    """Update user role - Admin only"""
+    try:
+        data = request.get_json()
+        new_role = data.get('role', '').strip().lower()
+        
+        if new_role not in ['admin', 'moderator', 'user']:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid role. Must be admin, moderator, or user'
+            }), 400
+        
+        target_user = User.query.get(user_id)
+        if not target_user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+        
+        # Prevent self-demotion if last admin
+        if target_user.id == current_user.id and new_role != 'admin':
+            admin_count = User.query.filter_by(status='admin').count()
+            if admin_count <= 1:
+                return jsonify({
+                    'success': False,
+                    'message': 'Cannot demote yourself. At least one admin must remain.'
+                }), 400
+        
+        target_user.status = new_role
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'User role updated to {new_role}',
+            'user': target_user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Update Role Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to update user role'}), 500
+
+
+# ============================================================================
+# BOOKING ENDPOINTS
+# ============================================================================
+
+@app.route('/api/bookings', methods=['GET'])
+@role_required(['admin', 'moderator'])
+def get_bookings(current_user):
+    """Get all bookings with optional filters - Admin/Moderator only"""
+    try:
+        status_filter = request.args.get('status')
+        date_from = request.args.get('from')
+        date_to = request.args.get('to')
+        
+        query = Booking.query
+        
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        
+        if date_from:
+            try:
+                from_date = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+                query = query.filter(Booking.created_at >= from_date)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+                query = query.filter(Booking.created_at <= to_date)
+            except ValueError:
+                pass
+        
+        bookings = query.order_by(Booking.created_at.desc()).all()
+        bookings_list = [booking.to_dict() for booking in bookings]
+        
+        return jsonify({
+            'success': True,
+            'bookings': bookings_list
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Get Bookings Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to fetch bookings'}), 500
+
+
+@app.route('/api/bookings/<int:booking_id>/status', methods=['PATCH'])
+@role_required(['admin', 'moderator'])
+def update_booking_status(current_user, booking_id):
+    """Update booking status - Admin/Moderator only"""
+    try:
+        data = request.get_json()
+        new_status = data.get('status', '').strip().lower()
+        
+        valid_statuses = ['pending', 'confirmed', 'completed', 'cancelled']
+        if new_status not in valid_statuses:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
+            }), 400
+        
+        booking = Booking.query.get(booking_id)
+        if not booking:
+            return jsonify({'success': False, 'message': 'Booking not found'}), 404
+        
+        booking.status = new_status
+        booking.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Booking status updated to {new_status}',
+            'booking': booking.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Update Booking Status Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to update booking status'}), 500
+
+
+# ============================================================================
+# CONTENT MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.route('/api/content', methods=['GET'])
+@role_required(['admin', 'moderator'])
+def get_content_blocks(current_user):
+    """Get all content blocks - Admin/Moderator only"""
+    try:
+        key_filter = request.args.get('key')
+        
+        query = ContentBlock.query
+        if key_filter:
+            query = query.filter_by(key=key_filter)
+        
+        content_blocks = query.order_by(ContentBlock.key).all()
+        blocks_list = [block.to_dict() for block in content_blocks]
+        
+        return jsonify({
+            'success': True,
+            'content_blocks': blocks_list
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Get Content Blocks Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to fetch content blocks'}), 500
+
+
+@app.route('/api/content', methods=['POST'])
+@role_required(['admin'])
+def create_content_block(current_user):
+    """Create a new content block - Admin only"""
+    try:
+        data = request.get_json()
+        
+        key = data.get('key', '').strip()
+        title = data.get('title', '').strip()
+        content = data.get('content', '').strip()
+        media_url = data.get('media_url', '').strip()
+        
+        if not key:
+            return jsonify({'success': False, 'message': 'Key is required'}), 400
+        
+        # Check if key already exists
+        existing = ContentBlock.query.filter_by(key=key).first()
+        if existing:
+            return jsonify({'success': False, 'message': 'Content block with this key already exists'}), 409
+        
+        new_block = ContentBlock(
+            key=key,
+            title=title,
+            content=content,
+            media_url=media_url,
+            updated_by=current_user.id
+        )
+        
+        db.session.add(new_block)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Content block created successfully',
+            'content_block': new_block.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Create Content Block Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to create content block'}), 500
+
+
+@app.route('/api/content/<int:block_id>', methods=['PUT'])
+@role_required(['admin'])
+def update_content_block(current_user, block_id):
+    """Update a content block - Admin only"""
+    try:
+        data = request.get_json()
+        
+        block = ContentBlock.query.get(block_id)
+        if not block:
+            return jsonify({'success': False, 'message': 'Content block not found'}), 404
+        
+        # Update fields if provided
+        if 'title' in data:
+            block.title = data.get('title', '').strip()
+        if 'content' in data:
+            block.content = data.get('content', '').strip()
+        if 'media_url' in data:
+            block.media_url = data.get('media_url', '').strip()
+        
+        block.updated_by = current_user.id
+        block.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Content block updated successfully',
+            'content_block': block.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Update Content Block Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to update content block'}), 500
+
+
+# ============================================================================
+# DASHBOARD ANALYTICS ENDPOINTS
+# ============================================================================
+
+@app.route('/api/dashboard/summary', methods=['GET'])
+@role_required(['admin', 'moderator'])
+def dashboard_summary(current_user):
+    """Get dashboard summary statistics - Admin/Moderator only"""
+    try:
+        total_users = User.query.count()
+        verified_users = User.query.filter_by(is_verified=True).count()
+        admin_users = User.query.filter_by(status='admin').count()
+        moderator_users = User.query.filter_by(status='moderator').count()
+        
+        total_bookings = Booking.query.count()
+        pending_bookings = Booking.query.filter_by(status='pending').count()
+        confirmed_bookings = Booking.query.filter_by(status='confirmed').count()
+        completed_bookings = Booking.query.filter_by(status='completed').count()
+        cancelled_bookings = Booking.query.filter_by(status='cancelled').count()
+        
+        # Calculate total revenue from completed bookings
+        completed_bookings_query = Booking.query.filter_by(status='completed')
+        total_revenue = sum(float(booking.price) for booking in completed_bookings_query.all() if booking.price)
+        
+        # Get bookings from last 7 days
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        recent_bookings = Booking.query.filter(Booking.created_at >= seven_days_ago).count()
+        
+        return jsonify({
+            'success': True,
+            'summary': {
+                'users': {
+                    'total': total_users,
+                    'verified': verified_users,
+                    'admins': admin_users,
+                    'moderators': moderator_users
+                },
+                'bookings': {
+                    'total': total_bookings,
+                    'pending': pending_bookings,
+                    'confirmed': confirmed_bookings,
+                    'completed': completed_bookings,
+                    'cancelled': cancelled_bookings,
+                    'recent_7_days': recent_bookings
+                },
+                'revenue': {
+                    'total': total_revenue
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Dashboard Summary Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to load dashboard summary'}), 500
+
+
+@app.route('/api/dashboard/charts', methods=['GET'])
+@role_required(['admin', 'moderator'])
+def dashboard_charts(current_user):
+    """Get chart data for dashboard - Admin/Moderator only"""
+    try:
+        range_type = request.args.get('range', '7d')  # 7d, 30d, 90d
+        
+        days = 7
+        if range_type == '30d':
+            days = 30
+        elif range_type == '90d':
+            days = 90
+        
+        start_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Bookings over time (daily)
+        bookings_data = []
+        for i in range(days):
+            date = start_date + timedelta(days=i)
+            next_date = date + timedelta(days=1)
+            count = Booking.query.filter(
+                Booking.created_at >= date,
+                Booking.created_at < next_date
+            ).count()
+            bookings_data.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'bookings': count
+            })
+        
+        # Revenue over time (daily)
+        revenue_data = []
+        for i in range(days):
+            date = start_date + timedelta(days=i)
+            next_date = date + timedelta(days=1)
+            day_bookings = Booking.query.filter(
+                Booking.created_at >= date,
+                Booking.created_at < next_date,
+                Booking.status == 'completed'
+            ).all()
+            revenue = sum(float(b.price) for b in day_bookings if b.price)
+            revenue_data.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'revenue': revenue
+            })
+        
+        # User registrations over time (daily)
+        users_data = []
+        for i in range(days):
+            date = start_date + timedelta(days=i)
+            next_date = date + timedelta(days=1)
+            count = User.query.filter(
+                User.created_at >= date,
+                User.created_at < next_date
+            ).count()
+            users_data.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'users': count
+            })
+        
+        # Booking status distribution
+        status_distribution = {
+            'pending': Booking.query.filter_by(status='pending').count(),
+            'confirmed': Booking.query.filter_by(status='confirmed').count(),
+            'completed': Booking.query.filter_by(status='completed').count(),
+            'cancelled': Booking.query.filter_by(status='cancelled').count()
+        }
+        
+        return jsonify({
+            'success': True,
+            'charts': {
+                'bookings_over_time': bookings_data,
+                'revenue_over_time': revenue_data,
+                'users_over_time': users_data,
+                'booking_status_distribution': status_distribution
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Dashboard Charts Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to load chart data'}), 500
 
 # ============================================================================
 # ERROR HANDLERS
