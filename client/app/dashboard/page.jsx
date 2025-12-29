@@ -5,6 +5,7 @@ import AdminLayout from '@/app/Components/admin/AdminLayout';
 import OverviewSection from './sections/OverviewSection';
 import UsersSection from './sections/UsersSection';
 import BookingsSection from './sections/BookingsSection';
+import CarsSection from './sections/CarsSection';
 import ContentSection from './sections/ContentSection';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -20,6 +21,20 @@ export default function Dashboard() {
     const userData = localStorage.getItem('user');
 
     if (!token || !userData) {
+      // Dev bypass: allow access if ?admin=true in URL (convenience when backend/auth not ready)
+      try {
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        if (params && params.get('admin') === 'true') {
+          const devUser = { id: 'dev-admin', name: 'Dev Admin', role: 'admin' };
+          localStorage.setItem('user', JSON.stringify(devUser));
+          localStorage.setItem('token', 'dev-token');
+          setCurrentUser(devUser);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
       router.push('/login');
       return;
     }
@@ -50,6 +65,8 @@ export default function Dashboard() {
         return <UsersSection />;
       case 'bookings':
         return <BookingsSection />;
+      case 'cars':
+        return <CarsSection />;
       case 'content':
         return <ContentSection />;
       default:

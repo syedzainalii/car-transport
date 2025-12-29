@@ -26,18 +26,44 @@ export default function UsersSection() {
     }
   };
 
-  const handleRoleChange = async (userId, newRole) => {
-    if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
+  const handleRoleChange = async (userId, newRole, originalRole) => {
+    // Get current user to check if we're changing their own role
+    const currentUser = users.find(u => u.id === userId);
+    if (!currentUser) return;
+
+    // Don't show confirmation if role hasn't changed
+    if (currentUser.role === newRole) return;
+
+    if (!confirm(`Are you sure you want to change ${currentUser.name}'s role from ${currentUser.role || 'user'} to ${newRole}?`)) {
+      // Reset select to original value if cancelled
+      const selectElement = document.querySelector(`select[data-user-id="${userId}"]`);
+      if (selectElement) {
+        selectElement.value = originalRole || 'user';
+      }
       return;
     }
 
     try {
       setUpdatingUserId(userId);
-      await userAPI.updateRole(userId, newRole);
+      console.log(`Updating user ${userId} role to ${newRole}`);
+      const result = await userAPI.updateRole(userId, newRole);
+      console.log('Update result:', result);
       await loadUsers(); // Reload users
       alert('User role updated successfully!');
     } catch (err) {
-      alert(err.message || 'Failed to update user role');
+      console.error('Error updating user role:', err);
+      console.error('Error details:', {
+        userId,
+        newRole,
+        error: err.message,
+        stack: err.stack
+      });
+      // Reset select to original value on error
+      const selectElement = document.querySelector(`select[data-user-id="${userId}"]`);
+      if (selectElement) {
+        selectElement.value = originalRole || 'user';
+      }
+      alert(err.message || 'Failed to update user role. Please check console for details.');
     } finally {
       setUpdatingUserId(null);
     }
@@ -107,20 +133,33 @@ export default function UsersSection() {
     },
   ];
 
-  const actions = (user) => (
-    <div className="flex gap-2">
-      <select
-        value={user.role || 'user'}
-        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-        disabled={updatingUserId === user.id}
-        className="text-sm px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-      >
-        <option value="user">User</option>
-        <option value="moderator">Moderator</option>
-        <option value="admin">Admin</option>
-      </select>
-    </div>
-  );
+  const actions = (user) => {
+    const originalRole = user.role || 'user';
+    return (
+      <div className="flex gap-2 items-center">
+        <select
+          data-user-id={user.id}
+          value={originalRole}
+          onChange={(e) => handleRoleChange(user.id, e.target.value, originalRole)}
+          disabled={updatingUserId === user.id}
+          className="text-sm px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <option value="user">User</option>
+          <option value="moderator">Moderator</option>
+          <option value="admin">Admin</option>
+        </select>
+        {updatingUserId === user.id && (
+          <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+            <svg className="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Updating...
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">

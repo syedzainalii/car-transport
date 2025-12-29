@@ -24,18 +24,37 @@ async function apiRequest(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  const data = await response.json();
+    // Check if response is ok before trying to parse JSON
+    if (!response.ok) {
+      // Try to parse error message from JSON response
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        // If response is not JSON, use status text
+        errorMessage = response.statusText || `HTTP ${response.status}`;
+      }
+      throw new Error(errorMessage);
+    }
 
-  if (!response.ok) {
-    throw new Error(data.message || 'API request failed');
+    // Parse JSON response
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    // Handle network errors or other fetch errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to server. Please check if the backend is running.');
+    }
+    // Re-throw other errors (including our custom Error from above)
+    throw error;
   }
-
-  return data;
 }
 
 // User endpoints
@@ -87,5 +106,36 @@ export const contentAPI = {
 export const dashboardAPI = {
   getSummary: () => apiRequest('/api/dashboard/summary'),
   getCharts: (range = '7d') => apiRequest(`/api/dashboard/charts?range=${range}`),
+};
+
+// Car endpoints
+export const carAPI = {
+  getAll: (activeOnly = true) => {
+    const query = activeOnly ? '?active=true' : '';
+    return apiRequest(`/api/cars${query}`);
+  },
+  create: (data) =>
+    apiRequest('/api/cars', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (carId, data) =>
+    apiRequest(`/api/cars/${carId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (carId) =>
+    apiRequest(`/api/cars/${carId}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Booking creation endpoint
+export const bookingCreateAPI = {
+  create: (data) =>
+    apiRequest('/api/bookings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 

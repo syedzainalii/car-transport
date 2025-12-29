@@ -2,9 +2,23 @@
 import { assets, carData } from '@/assets/assets'
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { carAPI, bookingCreateAPI } from '@/app/lib/api';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const Header = ({ isDarkMode, user, onLogout }) => {
   const router = useRouter();
+  const [cars, setCars] = useState([]);
+  const [loadingCars, setLoadingCars] = useState(true);
+  const [bookingForm, setBookingForm] = useState({
+    pickup_location: '',
+    dropoff_location: '',
+    car_id: '',
+    pickup_date: '',
+    pickup_time: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [bookingMessage, setBookingMessage] = useState('');
   
   const slides = [
     {
@@ -35,6 +49,28 @@ const Header = ({ isDarkMode, user, onLogout }) => {
 
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  // Fetch cars from API
+  useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        setLoadingCars(true);
+        const data = await carAPI.getAll(true); // Get only active cars
+        setCars(data.cars || []);
+      } catch (err) {
+        console.error('Failed to load cars, falling back to bundled assets:', err);
+        // fallback to bundled carData so selection works when backend is down
+        try {
+          setCars(carData || []);
+        } catch (e) {
+          setCars([]);
+        }
+      } finally {
+        setLoadingCars(false);
+      }
+    };
+    fetchCars();
+  }, []);
+
   // Auto-play functionality
   useEffect(() => {
     const timer = setInterval(() => {
@@ -54,6 +90,56 @@ const Header = ({ isDarkMode, user, onLogout }) => {
   const handleLogout = () => {
     if (onLogout) {
       onLogout();
+    }
+  };
+
+  const handleBookingSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    if (!bookingForm.pickup_location || !bookingForm.dropoff_location || !bookingForm.car_id) {
+      setBookingMessage('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setBookingMessage('');
+      
+      const selectedCar = cars.find(c => c.id === parseInt(bookingForm.car_id));
+      
+      const bookingData = {
+        pickup_location: bookingForm.pickup_location,
+        dropoff_location: bookingForm.dropoff_location,
+        car_id: parseInt(bookingForm.car_id),
+        car_type: selectedCar ? selectedCar.name : '',
+        pickup_date: bookingForm.pickup_date,
+        pickup_time: bookingForm.pickup_time
+      };
+
+      const result = await bookingCreateAPI.create(bookingData);
+      
+      if (result.success) {
+        setBookingMessage('Booking created successfully! We will contact you soon.');
+        // Reset form
+        setBookingForm({
+          pickup_location: '',
+          dropoff_location: '',
+          car_id: '',
+          pickup_date: '',
+          pickup_time: ''
+        });
+        // Clear message after 5 seconds
+        setTimeout(() => setBookingMessage(''), 5000);
+      }
+    } catch (err) {
+      setBookingMessage(err.message || 'Failed to create booking. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -111,6 +197,14 @@ const Header = ({ isDarkMode, user, onLogout }) => {
                 >
                   VIEW OFFER
                 </a>
+                {user && (user.role === 'admin' || user.role === 'moderator') && (
+                  <button
+                    onClick={() => router.push('/dashboard')}
+                    className='ml-4 px-6 py-3 border-2 border-white bg-white/10 backdrop-blur-sm hover:bg-blue-600 hover:text-white transition-all duration-300 uppercase tracking-widest text-xs font-bold text-white'
+                  >
+                    DASHBOARD
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -127,13 +221,25 @@ const Header = ({ isDarkMode, user, onLogout }) => {
               </div>
             )}
             
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            <form className="space-y-4" onSubmit={handleBookingSubmit}>
+              {bookingMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  bookingMessage.includes('successfully') 
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                }`}>
+                  {bookingMessage}
+                </div>
+              )}
+
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Pick-up Location</label>
                 <input 
                   type="text" 
                   placeholder="City, Airport, Station, etc" 
-                  className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 dark:text-gray-500 transition-colors text-gray-800" 
+                  value={bookingForm.pickup_location}
+                  onChange={(e) => setBookingForm({ ...bookingForm, pickup_location: e.target.value })}
+                  className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 dark:text-gray-500 transition-colors text-gray-800 dark:bg-darkHover" 
                   required
                 />
               </div>
@@ -143,7 +249,9 @@ const Header = ({ isDarkMode, user, onLogout }) => {
                 <input 
                   type="text" 
                   placeholder="City, Airport, Station, etc" 
-                  className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 transition-colors text-gray-800 dark:text-gray-500" 
+                  value={bookingForm.dropoff_location}
+                  onChange={(e) => setBookingForm({ ...bookingForm, dropoff_location: e.target.value })}
+                  className="w-full border border-gray-200 p-3 text-sm focus:outline-none focus:border-orange-400 transition-colors text-gray-800 dark:text-gray-500 dark:bg-darkHover" 
                   required
                 />
               </div>
@@ -151,13 +259,16 @@ const Header = ({ isDarkMode, user, onLogout }) => {
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Select Car</label>
                 <select 
+                  value={bookingForm.car_id}
+                  onChange={(e) => setBookingForm({ ...bookingForm, car_id: e.target.value })}
                   className="w-full border border-gray-200 dark:bg-darkHover p-3 text-sm text-gray-500 focus:outline-none focus:border-orange-400 transition-colors bg-white cursor-pointer"
                   required
+                  disabled={loadingCars}
                 >
-                  <option value="">Choose a Vehicle</option>
-                  {carData.map((car) => (
-                    <option key={car.id} value={car.title}>
-                      {car.brand} - {car.title}
+                  <option value="">{loadingCars ? 'Loading cars...' : 'Choose a Vehicle'}</option>
+                  {cars.map((car) => (
+                    <option key={car.id} value={car.id}>
+                      {car.brand ? `${car.brand} - ` : ''}{car.name}
                     </option>
                   ))}
                 </select>
@@ -168,7 +279,10 @@ const Header = ({ isDarkMode, user, onLogout }) => {
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Pick-up Date</label>
                   <input 
                     type="date" 
-                    className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none dark:[color-scheme:dark]" 
+                    value={bookingForm.pickup_date}
+                    onChange={(e) => setBookingForm({ ...bookingForm, pickup_date: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none dark:[color-scheme:dark] dark:bg-darkHover" 
                     required
                   />
                 </div>
@@ -176,7 +290,9 @@ const Header = ({ isDarkMode, user, onLogout }) => {
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Pick-up Time</label>
                   <input 
                     type="time" 
-                    className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none dark:[color-scheme:dark]" 
+                    value={bookingForm.pickup_time}
+                    onChange={(e) => setBookingForm({ ...bookingForm, pickup_time: e.target.value })}
+                    className="w-full border border-gray-200 p-3 text-sm text-gray-500 focus:outline-none dark:[color-scheme:dark] dark:bg-darkHover" 
                     required
                   />
                 </div>
@@ -184,15 +300,15 @@ const Header = ({ isDarkMode, user, onLogout }) => {
 
               <button 
                 type="submit" 
-                className="w-full bg-white border-2 border-orange-500 dark:bg-darkHover text-orange-600 font-bold py-4 mt-2 transition-all duration-300 hover:bg-orange-500 hover:text-white uppercase tracking-widest text-sm shadow-md active:scale-[0.98]"
-                disabled={!user}
+                className="w-full bg-white border-2 border-orange-500 dark:bg-darkHover text-orange-600 font-bold py-4 mt-2 transition-all duration-300 hover:bg-orange-500 hover:text-white uppercase tracking-widest text-sm shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!user || submitting || loadingCars}
               >
-                {user ? 'Book Ride' : 'Login to Book'}
+                {submitting ? 'Booking...' : user ? 'Book Ride' : 'Login to Book'}
               </button>
 
               {!user && (
                 <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-2">
-                  Please <button onClick={() => router.push('/login')} className="text-orange-500 hover:underline">login</button> to book a ride
+                  Please <button type="button" onClick={() => router.push('/login')} className="text-orange-500 hover:underline">login</button> to book a ride
                 </p>
               )}
             </form>

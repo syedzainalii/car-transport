@@ -1,10 +1,11 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { carData } from "@/assets/assets";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination } from "swiper/modules";
+import { carAPI } from "@/app/lib/api";
+import { carData } from "@/assets/assets";
 
 // Import Swiper styles
 import "swiper/css";
@@ -12,6 +13,25 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 
 const Car = () => {
+  const [cars, setCars] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        setLoading(true);
+        const data = await carAPI.getAll(true); // Get only active cars
+        setCars(data.cars || []);
+      } catch (err) {
+        console.error('Failed to load cars (using local assets):', err);
+        // Fallback to local assets if API fails
+        setCars(carData || []);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCars();
+  }, []);
   return (
     <section
       id="car"
@@ -52,61 +72,73 @@ const Car = () => {
           }}
           className="pb-16 px-2"
         >
-          {carData.map((car) => (
-            <SwiperSlide key={car.id} className="py-4">
-              <div className="bg-white dark:bg-darkHover border border-gray-200 dark:border-darkHover rounded-xl overflow-hidden group/card transition-all duration-300 shadow-lg hover:shadow-2xl hover:-translate-y-1">
-                {/* Image Container */}
-                <div className="relative h-48 overflow-hidden">
-                  <Image
-                    src={car.image}
-                    alt={car.brand}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover/card:scale-110"
-                  />
+          {loading ? (
+            <SwiperSlide className="py-4">
+              <div className="flex items-center justify-center h-64">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+              </div>
+            </SwiperSlide>
+          ) : cars.length === 0 ? (
+            <SwiperSlide className="py-4">
+              <div className="flex items-center justify-center h-64">
+                <p className="text-gray-500 dark:text-gray-400">No cars available</p>
+              </div>
+            </SwiperSlide>
+          ) : (
+            cars.map((car) => {
+              const img = car.image || car.image_url;
+              const title = car.name || car.title;
+              const brand = car.brand || car.brand;
+              const id = car.id;
+              return (
+              <SwiperSlide key={car.id} className="py-4">
+                <div className="bg-white dark:bg-darkHover border border-gray-200 dark:border-darkHover rounded-xl overflow-hidden group/card transition-all duration-300 shadow-lg hover:shadow-2xl hover:-translate-y-1">
+                  {/* Image Container */}
+                  <div className="relative h-48 overflow-hidden">
+                    <img
+                      src={img}
+                      alt={title}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-110"
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/400x300?text=Car+Image';
+                      }}
+                    />
+                  </div>
 
-                  {/* Price Tag Overlay */}
-                  <div className="absolute bottom-4 left-0 bg-white dark:bg-darkHover py-1 px-4 flex items-center shadow-md z-10 rounded-r-lg">
-                    <span className="text-orange-500 font-bold text-xl">
-                      {car.price}
-                    </span>
-                    <div className="ml-1 leading-tight">
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold">
-                        From
+                  {/* Content Details */}
+                  <div className="p-6 text-center">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
+                      {title}
+                    </h3>
+                    {brand && (
+                      <p className="text-xs text-gray-400 dark:text-zinc-500 tracking-widest uppercase mb-6">
+                        {brand}
                       </p>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold">
-                        /Day
-                      </p>
+                    )}
+
+                    <div className="flex gap-2">
+                      {/* Primary Booking Button */}
+                      <a
+                        href="#top"
+                        className="flex-1 py-2 border border-gray-200 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-500 hover:border-orange-500 hover:text-white transition-all rounded-md text-center"
+                      >
+                        Book now
+                      </a>
+
+                      {/* Detail Link - Routes to /car/[id] */}
+                      <Link
+                        href={`/car/${id}`}
+                        className="flex-1 py-2 border border-gray-200 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-500 hover:border-orange-500 hover:text-white transition-all rounded-md text-center"
+                      >
+                        Details
+                      </Link>
                     </div>
                   </div>
                 </div>
-
-                {/* Content Details */}
-                <div className="p-6 text-center">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
-                    {car.title}
-                  </h3>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 tracking-widest uppercase mb-6">
-                    {car.brand}
-                  </p>
-
-                  <div className="flex gap-2">
-                    {/* Primary Booking Button */}
-                    <button className="flex-1 py-2 border border-gray-200 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-500 hover:border-orange-500 hover:text-white transition-all rounded-md">
-                      Book now
-                    </button>
-
-                    {/* Detail Link - Routes to /car/[id] */}
-                    <Link
-                      href={`/car/${car.id}`}
-                      className="flex-1 py-2 border border-gray-200 dark:border-zinc-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-orange-500 hover:border-orange-500 hover:text-white transition-all rounded-md text-center"
-                    >
-                      Details
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </SwiperSlide>
-          ))}
+              </SwiperSlide>
+            );
+            })
+          )}
         </Swiper>
 
         {/* Custom Navigation Arrows */}
