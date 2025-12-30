@@ -20,64 +20,69 @@ const Header = ({ isDarkMode, user, onLogout }) => {
   const [submitting, setSubmitting] = useState(false);
   const [bookingMessage, setBookingMessage] = useState('');
   
-  const slides = [
-    {
-      image: assets.car1,
-      title: 'PrimePath',
-      subtitle: 'Precision Timing for the Modern Professional',
-      description: 'Whether you\'re heading to a high-stakes board meeting or catching a red-eye flight, PrimePath ensures you arrive composed and on schedule.'
-    },
-    {
-      image: assets.car2,
-      title: 'SwiftLoop',
-      subtitle: 'Your City, Just a Tap Away',
-      description: 'Navigate the urban jungle without the stress of parking or traffic.'
-    },
-    {
-      image: assets.car3,
-      title: 'GreenGlide',
-      subtitle: 'Clean Rides for a Greener Tomorrow',
-      description: 'Move across town with a zero-carbon footprint.'
-    },
-    {
-      image: assets.car4,
-      title: 'NeighborRide',
-      subtitle: 'Friendly Faces, Fairer Fares.',
-      description: 'Quality transport shouldn\'t break the bank.'
-    }
-  ];
-
+  const [slides, setSlides] = useState([]);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [loadingSlides, setLoadingSlides] = useState(true);
 
-  // Fetch cars from API
+  // Fetch cars and header slides from API
   useEffect(() => {
-    const fetchCars = async () => {
+    const fetchCarsAndHeader = async () => {
+      // Fetch cars
       try {
         setLoadingCars(true);
-        const data = await carAPI.getAll(true); // Get only active cars
-        setCars(data.cars || []);
+        const carResponse = await carAPI.getAll(true);
+        setCars(carResponse.cars || []);
       } catch (err) {
-        console.error('Failed to load cars, falling back to bundled assets:', err);
-        // fallback to bundled carData so selection works when backend is down
-        try {
-          setCars(carData || []);
-        } catch (e) {
-          setCars([]);
-        }
+        console.error('Failed to load cars:', err);
+        setCars([]);
       } finally {
         setLoadingCars(false);
       }
+
+      // Fetch header slides from backend
+      try {
+        setLoadingSlides(true);
+        const response = await fetch(`${API_URL}/api/public/content?key=header_slides`);
+        const data = await response.json();
+        
+        if (data.success && data.content.header_slides) {
+          const slideUrls = JSON.parse(data.content.header_slides.content || '[]');
+          
+          // Convert URLs to slide objects with default content
+          const slideObjects = slideUrls.map((url, index) => ({
+            image: `${API_URL}${url}`,
+            title: data.content.header_slides.title || `Slide ${index + 1}`,
+            subtitle: 'LUXURY TRANSPORT',
+            description: 'Experience premium rides with our exclusive fleet'
+          }));
+          
+          setSlides(slideObjects);
+        } else {
+          // Fallback to assets if no slides in backend
+          setSlides(carData);
+        }
+      } catch (err) {
+        console.error('Failed to load header slides:', err);
+        // Fallback to assets
+        setSlides(carData);
+      } finally {
+        setLoadingSlides(false);
+      }
     };
-    fetchCars();
+    
+    fetchCarsAndHeader();
   }, []);
 
   // Auto-play functionality
   useEffect(() => {
+    if (slides.length === 0) return;
+    
     const timer = setInterval(() => {
-      nextSlide();
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
+    
     return () => clearInterval(timer);
-  }, [currentSlide]);
+  }, [slides.length]);
 
   const nextSlide = () => {
     setCurrentSlide((prev) => (prev + 1) % slides.length);
@@ -85,12 +90,6 @@ const Header = ({ isDarkMode, user, onLogout }) => {
 
   const prevSlide = () => {
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-  };
-
-  const handleLogout = () => {
-    if (onLogout) {
-      onLogout();
-    }
   };
 
   const handleBookingSubmit = async (e) => {
@@ -125,7 +124,6 @@ const Header = ({ isDarkMode, user, onLogout }) => {
       
       if (result.success) {
         setBookingMessage('Booking created successfully! We will contact you soon.');
-        // Reset form
         setBookingForm({
           pickup_location: '',
           dropoff_location: '',
@@ -133,7 +131,6 @@ const Header = ({ isDarkMode, user, onLogout }) => {
           pickup_date: '',
           pickup_time: ''
         });
-        // Clear message after 5 seconds
         setTimeout(() => setBookingMessage(''), 5000);
       }
     } catch (err) {
@@ -142,6 +139,17 @@ const Header = ({ isDarkMode, user, onLogout }) => {
       setSubmitting(false);
     }
   };
+
+  if (loadingSlides) {
+    return (
+      <div className='w-screen h-[95vh] flex items-center justify-center mt-20 bg-gray-100 dark:bg-darkTheme'>
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className='relative w-screen h-[95vh] flex items-center justify-center overflow-hidden mt-20'>
@@ -160,7 +168,6 @@ const Header = ({ isDarkMode, user, onLogout }) => {
               backgroundRepeat: 'no-repeat'
             }}
           >
-            {/* Dark Overlay for better text readability */}
             <div className='absolute inset-0 bg-black/50'></div>
           </div>
         ))}
@@ -190,21 +197,22 @@ const Header = ({ isDarkMode, user, onLogout }) => {
                 <p className='text-lg md:text-xl font-ovo mt-4 mb-10 text-white/90 max-w-md'>
                   {slide.description}
                 </p>
-                
-                <a 
-                  href="#car"
-                  className='px-12 md:px-16 py-3 border-2 border-white bg-white/10 backdrop-blur-sm hover:bg-orange-500 hover:text-white transition-all duration-300 uppercase tracking-widest text-xs font-bold text-white'
-                >
-                  VIEW OFFER
-                </a>
-                {user && (user.role === 'admin' || user.role === 'moderator') && (
-                  <button
-                    onClick={() => router.push('/dashboard')}
-                    className='ml-4 px-6 py-3 border-2 border-white bg-white/10 backdrop-blur-sm hover:bg-blue-600 hover:text-white transition-all duration-300 uppercase tracking-widest text-xs font-bold text-white'
+                <div className="flex flex-col sm:flex-row gap-4 mt-2">
+                  <a 
+                    href="#car"
+                    className='px-12 md:px-16 py-3 border-2 border-white bg-white/10 backdrop-blur-sm hover:bg-orange-500 hover:text-white transition-all duration-300 uppercase tracking-widest text-xs font-bold text-white'
                   >
-                    DASHBOARD
-                  </button>
-                )}
+                    VIEW OFFER
+                  </a>
+                  {user && (user.role === 'admin' || user.role === 'moderator') && (
+                    <button
+                      onClick={() => router.push('/dashboard')}
+                      className='px-6 py-3 border-2 border-white bg-white/10 backdrop-blur-sm hover:bg-blue-600 hover:text-white transition-all duration-300 uppercase tracking-widest text-xs font-bold text-white'
+                    >
+                      DASHBOARD
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -317,25 +325,31 @@ const Header = ({ isDarkMode, user, onLogout }) => {
         </div>
 
         {/* Navigation Arrows */}
-        <button onClick={prevSlide} className='absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 bg-white/10 hover:bg-white/30 backdrop-blur-md p-4 rounded-full text-white transition-all'>
-          ‹
-        </button>
-        <button onClick={nextSlide} className='absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 bg-white/10 hover:bg-white/30 backdrop-blur-md p-4 rounded-full text-white transition-all'>
-          ›
-        </button>
+        {slides.length > 1 && (
+          <>
+            <button onClick={prevSlide} className='absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 bg-white/10 hover:bg-white/30 backdrop-blur-md p-4 rounded-full text-white transition-all'>
+              ‹
+            </button>
+            <button onClick={nextSlide} className='absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 bg-white/10 hover:bg-white/30 backdrop-blur-md p-4 rounded-full text-white transition-all'>
+              ›
+            </button>
+          </>
+        )}
 
         {/* Indicators */}
-        <div className='absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 z-10'>
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentSlide(index)}
-              className={`h-1 transition-all duration-500 ${
-                  index === currentSlide ? 'bg-orange-500 w-12' : 'bg-white/40 w-6'
-              }`}
-            />
-          ))}
-        </div>
+        {slides.length > 1 && (
+          <div className='absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 z-10'>
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentSlide(index)}
+                className={`h-1 transition-all duration-500 ${
+                    index === currentSlide ? 'bg-orange-500 w-12' : 'bg-white/40 w-6'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     
   );

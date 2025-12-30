@@ -26,6 +26,8 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/postgres
     depends_on:
       - db
+    volumes:
+      - ./server/uploads/cars:/app/uploads/cars
 
   # db service
   db:

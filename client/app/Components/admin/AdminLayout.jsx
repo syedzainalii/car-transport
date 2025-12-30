@@ -13,7 +13,7 @@ export default function AdminLayout({ children, currentUser, activeTab, onTabCha
     { id: 'users', label: 'Users & Roles', icon: '👥' },
     { id: 'bookings', label: 'Bookings', icon: '🚗' },
     { id: 'cars', label: 'Cars', icon: '🚙' },
-    { id: 'content', label: 'Content', icon: '✏️' },
+    { id: 'blocks', label: 'Content Blocks', icon: '🧩' },
   ];
 
   const logout = () => {

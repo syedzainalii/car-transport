@@ -10,23 +10,54 @@ import string
 from datetime import datetime, UTC, timedelta
 from functools import wraps
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
+
 app = Flask(__name__)
+
+# Enable automatic OPTIONS response for all routes (CORS preflight)
+@app.before_request
+def handle_options():
+    if request.method == 'OPTIONS':
+        response = app.make_default_options_response()
+        headers = response.headers
+        headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        headers['Access-Control-Allow-Headers'] = request.headers.get('Access-Control-Request-Headers', 'Authorization, Content-Type')
+        headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"],
-        "supports_credentials": True
-    }
-})
+# CORS Configuration
+CORS(app, 
+     origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+     expose_headers=["Content-Type", "Authorization"])
+
+# Enable automatic OPTIONS response
+@app.before_request
+def handle_options():
+    if request.method == 'OPTIONS':
+        response = app.make_default_options_response()
+        headers = response.headers
+        origin = request.headers.get('Origin', '*')
+        
+        if origin in ['http://localhost:3000', 'http://127.0.0.1:3000']:
+            headers['Access-Control-Allow-Origin'] = origin
+        else:
+            headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+            
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+        headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://postgres:postgres@db:5432/postgres"
@@ -38,6 +69,19 @@ app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', os.environ.get('MAIL_USERNAME'))
+
+# File Upload Configuration
+UPLOAD_FOLDER = 'uploads/content'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs('uploads/cars', exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 db = SQLAlchemy(app)
 mail = Mail(app)
@@ -108,16 +152,24 @@ class Booking(db.Model):
 class Car(db.Model):
     __tablename__ = 'cars'
     
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     brand = db.Column(db.String(100), nullable=True)
     details = db.Column(db.Text, nullable=True)
     image_url = db.Column(db.String(500), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
+    year = db.Column(db.String(10), nullable=True)
+    seats = db.Column(db.String(10), nullable=True)
+    transmission = db.Column(db.String(50), nullable=True)
+    fuel = db.Column(db.String(50), nullable=True)
+    features = db.Column(db.Text, nullable=True)  # JSON stringified list
+    specs = db.Column(db.Text, nullable=True)     # JSON stringified dict
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self):
+        import json
         return {
             'id': self.id,
             'name': self.name,
@@ -125,6 +177,12 @@ class Car(db.Model):
             'details': self.details,
             'image_url': self.image_url,
             'is_active': self.is_active,
+            'year': self.year,
+            'seats': self.seats,
+            'transmission': self.transmission,
+            'fuel': self.fuel,
+            'features': json.loads(self.features) if self.features else [],
+            'specs': json.loads(self.specs) if self.specs else {},
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -688,60 +746,63 @@ def change_password(current_user):
 # BOOKING ENDPOINTS
 # ============================================================================
 
-@app.route('/api/bookings', methods=['POST'])
+
+@app.route('/api/bookings', methods=['GET', 'POST'])
 @token_required
-def create_booking(current_user):
-    """Create a new booking - Authenticated users only"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'success': False, 'message': 'No data provided'}), 400
-        
-        pickup_location = data.get('pickup_location', '').strip()
-        dropoff_location = data.get('dropoff_location', '').strip()
-        car_type = data.get('car_type', '').strip()
-        ride_date = data.get('ride_date')
-        
-        # Validate required fields
-        if not all([pickup_location, dropoff_location, car_type]):
+def bookings_handler(current_user):
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'success': False, 'message': 'No data provided'}), 400
+            pickup_location = data.get('pickup_location', '').strip()
+            dropoff_location = data.get('dropoff_location', '').strip()
+            car_type = data.get('car_type', '').strip()
+            ride_date = data.get('ride_date')
+            if not all([pickup_location, dropoff_location, car_type]):
+                return jsonify({
+                    'success': False,
+                    'message': 'Pickup location, dropoff location, and car type are required'
+                }), 400
+            ride_date_obj = None
+            if ride_date:
+                try:
+                    ride_date_obj = datetime.fromisoformat(ride_date.replace('Z', '+00:00'))
+                except ValueError:
+                    return jsonify({'success': False, 'message': 'Invalid date format'}), 400
+            new_booking = Booking(
+                user_id=current_user.id,
+                pickup_location=pickup_location,
+                dropoff_location=dropoff_location,
+                car_type=car_type,
+                ride_date=ride_date_obj,
+                status='pending'
+            )
+            db.session.add(new_booking)
+            db.session.commit()
             return jsonify({
-                'success': False,
-                'message': 'Pickup location, dropoff location, and car type are required'
-            }), 400
-        
-        
-        # Parse ride_date if provided
-        ride_date_obj = None
-        if ride_date:
-            try:
-                ride_date_obj = datetime.fromisoformat(ride_date.replace('Z', '+00:00'))
-            except ValueError:
-                return jsonify({'success': False, 'message': 'Invalid date format'}), 400
-        
-        # Create new booking
-        new_booking = Booking(
-            user_id=current_user.id,
-            pickup_location=pickup_location,
-            dropoff_location=dropoff_location,
-            car_type=car_type,
-            ride_date=ride_date_obj,
-            status='pending'
-        )
-        
-        db.session.add(new_booking)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Booking created successfully',
-            'booking': new_booking.to_dict()
-        }), 201
-        
+                'success': True,
+                'message': 'Booking created successfully',
+                'booking': new_booking.to_dict()
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            print(f"❌ Create Booking Error: {str(e)}")
+            return jsonify({'success': False, 'message': 'Failed to create booking'}), 500
+    # GET method for admin/moderator
+    if current_user.status not in ['admin', 'moderator']:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    try:
+        status = request.args.get('status')
+        query = Booking.query
+        if status:
+            query = query.filter_by(status=status)
+        bookings = query.order_by(Booking.created_at.desc()).all()
+        bookings_list = [booking.to_dict() for booking in bookings]
+        return jsonify({'success': True, 'bookings': bookings_list}), 200
     except Exception as e:
-        db.session.rollback()
-        print(f"❌ Create Booking Error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Failed to create booking'}), 500
+        print(f"❌ Get All Bookings Error: {str(e)}")
+        return jsonify({'success': False, 'message': 'Failed to fetch bookings'}), 500
 
 
 @app.route('/api/bookings/my-bookings', methods=['GET'])
@@ -797,14 +858,20 @@ def create_car(current_user):
         name = request.form.get('name', '').strip()
         brand = request.form.get('brand', '').strip()
         details = request.form.get('details', '').strip()
-        
+        year = request.form.get('year', '').strip()
+        seats = request.form.get('seats', '').strip()
+        transmission = request.form.get('transmission', '').strip()
+        fuel = request.form.get('fuel', '').strip()
+        features = request.form.get('features', '').strip()  # Expecting JSON string
+        specs = request.form.get('specs', '').strip()        # Expecting JSON string
+
         # FIX: Check for 'true' OR '1' (since React sends '1')
         is_active_raw = request.form.get('is_active', 'true').lower()
         is_active = is_active_raw in ['true', '1']
-        
+
         if not name:
             return jsonify({'success': False, 'message': 'Car name is required'}), 400
-        
+
         image_url = None
         if 'image' in request.files:
             file = request.files['image']
@@ -815,11 +882,17 @@ def create_car(current_user):
                 filename = f"car_{datetime.utcnow().timestamp()}_{file.filename}"
                 file.save(os.path.join('uploads', 'cars', filename))
                 image_url = f"/uploads/cars/{filename}"
-        
+
         car = Car(
             name=name,
             brand=brand,
             details=details,
+            year=year,
+            seats=seats,
+            transmission=transmission,
+            fuel=fuel,
+            features=features,
+            specs=specs,
             image_url=image_url,
             is_active=is_active
         )
@@ -854,12 +927,24 @@ def update_car(current_user, car_id):
             car.brand = request.form.get('brand', '').strip()
         if 'details' in request.form:
             car.details = request.form.get('details', '').strip()
-        
+        if 'year' in request.form:
+            car.year = request.form.get('year', '').strip()
+        if 'seats' in request.form:
+            car.seats = request.form.get('seats', '').strip()
+        if 'transmission' in request.form:
+            car.transmission = request.form.get('transmission', '').strip()
+        if 'fuel' in request.form:
+            car.fuel = request.form.get('fuel', '').strip()
+        if 'features' in request.form:
+            car.features = request.form.get('features', '').strip()
+        if 'specs' in request.form:
+            car.specs = request.form.get('specs', '').strip()
+
         # FIX: Properly handle the is_active toggle
         if 'is_active' in request.form:
             is_active_raw = request.form.get('is_active', '').lower()
             car.is_active = is_active_raw in ['true', '1']
-        
+
         if 'image' in request.files:
             file = request.files['image']
             if file and file.filename:
@@ -912,7 +997,6 @@ def uploaded_file(filename):
     # Using absolute path to avoid directory confusion
     uploads_dir = os.path.abspath(os.path.join(os.getcwd(), 'uploads'))
     return send_from_directory(uploads_dir, filename)
-
 # ============================================================================
 # CONTENT MANAGEMENT ENDPOINTS
 # ============================================================================
@@ -920,105 +1004,205 @@ def uploaded_file(filename):
 @app.route('/api/content', methods=['GET'])
 @role_required(['admin', 'moderator'])
 def get_content_blocks(current_user):
-    """Get all content blocks - Admin/Moderator only"""
     try:
         key_filter = request.args.get('key')
-        
         query = ContentBlock.query
+
         if key_filter:
             query = query.filter_by(key=key_filter)
-        
-        content_blocks = query.order_by(ContentBlock.key).all()
-        blocks_list = [block.to_dict() for block in content_blocks]
-        
+
+        blocks = query.order_by(ContentBlock.key).all()
+
         return jsonify({
             'success': True,
-            'content_blocks': blocks_list
+            'content_blocks': [block.to_dict() for block in blocks]
         }), 200
-        
+
     except Exception as e:
-        print(f"❌ Get Content Blocks Error: {str(e)}")
+        print(f"❌ Get Content Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': 'Failed to fetch content blocks'}), 500
 
 
 @app.route('/api/content', methods=['POST'])
 @role_required(['admin'])
 def create_content_block(current_user):
-    """Create a new content block - Admin only"""
     try:
-        data = request.get_json()
-        
-        key = data.get('key', '').strip()
-        title = data.get('title', '').strip()
-        content = data.get('content', '').strip()
-        media_url = data.get('media_url', '').strip()
-        
+        key = request.form.get('key', '').strip()
+        title = request.form.get('title', '').strip()
+        content = request.form.get('content', '').strip()
+
+        print(f"📝 Creating content block: key={key}, title={title}")
+
         if not key:
             return jsonify({'success': False, 'message': 'Key is required'}), 400
-        
-        # Check if key already exists
-        existing = ContentBlock.query.filter_by(key=key).first()
-        if existing:
-            return jsonify({'success': False, 'message': 'Content block with this key already exists'}), 409
-        
-        new_block = ContentBlock(
+
+        if ContentBlock.query.filter_by(key=key).first():
+            return jsonify({'success': False, 'message': 'Content block key already exists'}), 409
+
+        media_url = None
+        file = request.files.get('media_file')
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filename = f"{key}_{int(datetime.utcnow().timestamp())}_{filename}"
+            
+            # Save to uploads/content/
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            file.save(filepath)
+            
+            # Store as /uploads/content/filename
+            media_url = f"/uploads/content/{filename}"
+            
+            print(f"✅ File saved: {media_url}")
+
+        block = ContentBlock(
             key=key,
             title=title,
             content=content,
             media_url=media_url,
             updated_by=current_user.id
         )
-        
-        db.session.add(new_block)
+
+        db.session.add(block)
         db.session.commit()
-        
+
+        print(f"✅ Content block created: ID={block.id}")
+
         return jsonify({
             'success': True,
-            'message': 'Content block created successfully',
-            'content_block': new_block.to_dict()
+            'message': 'Content block created',
+            'content_block': block.to_dict()
         }), 201
-        
+
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Create Content Block Error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Failed to create content block'}), 500
+        print(f"❌ Create Content Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Failed to create content block: {str(e)}'}), 500
 
 
 @app.route('/api/content/<int:block_id>', methods=['PUT'])
 @role_required(['admin'])
 def update_content_block(current_user, block_id):
-    """Update a content block - Admin only"""
     try:
-        data = request.get_json()
+        print(f"🔄 Updating content block ID: {block_id}")
+        
+        block = ContentBlock.query.get(block_id)
+        if not block:
+            print(f"❌ Block not found: {block_id}")
+            return jsonify({'success': False, 'message': 'Content block not found'}), 404
+
+        print(f"📦 Current block: key={block.key}, title={block.title}")
+
+        # Get form data
+        title = request.form.get('title')
+        content = request.form.get('content')
+
+        print(f"📝 New data: title={title}, content={content[:50] if content else None}...")
+
+        if title is not None:
+            block.title = title.strip()
+        if content is not None:
+            block.content = content.strip()
+
+        # Handle file upload
+        file = request.files.get('media_file')
+        if file and file.filename:
+            print(f"📁 File received: {file.filename}")
+            
+            if allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                filename = f"{block.key}_{int(datetime.utcnow().timestamp())}_{filename}"
+                
+                # Save to uploads/content/
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                
+                print(f"💾 Saving file to: {filepath}")
+                file.save(filepath)
+
+                # Delete old file if exists
+                if block.media_url:
+                    # Convert URL path to filesystem path
+                    old_path = block.media_url.replace('/uploads/', 'uploads/')
+                    print(f"🗑️ Attempting to delete old file: {old_path}")
+                    if os.path.exists(old_path):
+                        try:
+                            os.remove(old_path)
+                            print(f"✅ Old file deleted")
+                        except Exception as e:
+                            print(f"⚠️ Could not delete old file: {e}")
+
+                # Store as /uploads/content/filename
+                block.media_url = f"/uploads/content/{filename}"
+                print(f"✅ New media URL: {block.media_url}")
+            else:
+                print(f"❌ File type not allowed: {file.filename}")
+                return jsonify({'success': False, 'message': 'File type not allowed'}), 400
+        else:
+            print("ℹ️ No file uploaded")
+
+        block.updated_by = current_user.id
+        block.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        print(f"✅ Content block updated successfully")
+
+        return jsonify({
+            'success': True,
+            'message': 'Content block updated',
+            'content_block': block.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Update Content Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Failed to update content block: {str(e)}'}), 500
+
+
+@app.route('/api/content/<int:block_id>/json', methods=['PUT'])
+@role_required(['admin'])
+def update_content_block_json(current_user, block_id):
+    """Update content block with JSON data only (no file upload)"""
+    try:
+        print(f"🔄 JSON Update for block ID: {block_id}")
         
         block = ContentBlock.query.get(block_id)
         if not block:
             return jsonify({'success': False, 'message': 'Content block not found'}), 404
+
+        data = request.get_json()
+        print(f"📝 JSON data received: {data}")
         
-        # Update fields if provided
         if 'title' in data:
-            block.title = data.get('title', '').strip()
+            block.title = data['title'].strip()
         if 'content' in data:
-            block.content = data.get('content', '').strip()
-        if 'media_url' in data:
-            block.media_url = data.get('media_url', '').strip()
-        
+            block.content = data['content'].strip()
+
         block.updated_by = current_user.id
         block.updated_at = datetime.utcnow()
         db.session.commit()
-        
+
+        print(f"✅ JSON update successful")
+
         return jsonify({
             'success': True,
-            'message': 'Content block updated successfully',
+            'message': 'Content block updated',
             'content_block': block.to_dict()
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Update Content Block Error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Failed to update content block'}), 500
-
-
+        print(f"❌ Update Content JSON Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Failed to update content block: {str(e)}'}), 500
 # ============================================================================
 # DASHBOARD ANALYTICS ENDPOINTS
 # ============================================================================
@@ -1155,6 +1339,61 @@ def dashboard_charts(current_user):
     except Exception as e:
         print(f"❌ Dashboard Charts Error: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to load chart data'}), 500
+    
+# =====================================================================
+# UPDATE BOOKING STATUS (Admin / Moderator)
+# =====================================================================
+
+@app.route('/api/bookings/<int:booking_id>/status', methods=['PATCH'])
+@role_required(['admin', 'moderator'])
+def update_booking_status(current_user, booking_id):
+    """
+    Update booking status
+    Allowed statuses: pending, confirmed, completed, cancelled
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'status' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Status is required'
+            }), 400
+
+        new_status = data['status'].strip().lower()
+
+        ALLOWED_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled']
+        if new_status not in ALLOWED_STATUSES:
+            return jsonify({
+                'success': False,
+                'message': f'Invalid status. Allowed: {", ".join(ALLOWED_STATUSES)}'
+            }), 400
+
+        booking = Booking.query.get(booking_id)
+        if not booking:
+            return jsonify({
+                'success': False,
+                'message': 'Booking not found'
+            }), 404
+
+        booking.status = new_status
+        booking.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Booking status updated to {new_status}',
+            'booking': booking.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Update Booking Status Error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Failed to update booking status'
+        }), 500
+
 
 # ============================================================================
 # ERROR HANDLERS

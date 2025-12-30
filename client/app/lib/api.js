@@ -123,13 +123,35 @@ export const bookingAPI = {
 export const contentAPI = {
   getAll: (key = null) =>
     apiRequest(`/api/content${key ? `?key=${key}` : ''}`),
+  
   create: (data) =>
     apiRequest('/api/content', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  
   update: (id, data) =>
     apiRequest(`/api/content/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // NEW: FormData methods for file uploads
+  createFormData: (formData) =>
+    formDataRequest('/api/content', {
+      method: 'POST',
+      body: formData,
+    }),
+
+  updateFormData: (id, formData) =>
+    formDataRequest(`/api/content/${id}`, {
+      method: 'PUT',
+      body: formData,
+    }),
+
+  // NEW: JSON-only update (for header_slides array updates)
+  updateJSON: (id, data) =>
+    apiRequest(`/api/content/${id}/json`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

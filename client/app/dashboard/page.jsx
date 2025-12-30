@@ -6,7 +6,7 @@ import OverviewSection from './sections/OverviewSection';
 import UsersSection from './sections/UsersSection';
 import BookingsSection from './sections/BookingsSection';
 import CarsSection from './sections/CarsSection';
-import ContentSection from './sections/ContentSection';
+import ContentBlocksSection from './sections/ContentBlocksSection';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -69,6 +69,8 @@ export default function Dashboard() {
         return <CarsSection />;
       case 'content':
         return <ContentSection />;
+      case 'blocks':
+        return <ContentBlocksSection />;
       default:
         return <OverviewSection />;
     }

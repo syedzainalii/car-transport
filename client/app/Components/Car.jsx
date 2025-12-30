@@ -11,7 +11,7 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 
 // CONFIGURATION: Ensure this matches your Admin setup
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 const Car = () => {
   const [cars, setCars] = useState([]);

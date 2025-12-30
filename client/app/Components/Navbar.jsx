@@ -125,7 +125,7 @@ const Navbar = ({ isDarkMode, setIsDarkMode, user, onLogout }) => {
 
                     {/* My Bookings */}
                     <button
-                      onClick={() => router.push('/my-bookings')}
+                      onClick={() => router.push('/my-booking')}
                       className="dropdown-btn"
                     >
                       📋 My Bookings
@@ -133,7 +133,7 @@ const Navbar = ({ isDarkMode, setIsDarkMode, user, onLogout }) => {
 
                     {/* Profile Settings */}
                     <button
-                      onClick={() => router.push('/profile-settings')}
+                      onClick={() => router.push('/profile-setting')}
                       className="dropdown-btn"
                     >
                       ⚙️ Profile Settings

@@ -4,8 +4,8 @@ import DataTable from '@/app/Components/admin/DataTable';
 import { carAPI } from '@/app/lib/api';
 
 // CONFIGURATION: Replace this with your actual backend URL
-// If you are using Laravel/Express locally, it is usually http://localhost:8000 or http://localhost:5000
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// If you are using Flask locally, it is usually http://localhost:4000
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export default function CarsSection() {
   const [cars, setCars] = useState([]);
@@ -22,6 +22,8 @@ export default function CarsSection() {
     name: '',
     brand: '',
     details: '',
+    seats: '',
+    features: '', // comma-separated or JSON string // JSON string
     is_active: true,
     image: null,      // FILE OBJECT
     preview: '',      // PREVIEW URL / BASE64
@@ -73,6 +75,8 @@ export default function CarsSection() {
       name: '',
       brand: '',
       details: '',
+      seats: '',
+      features: '',
       is_active: true,
       image: null,
       preview: '',
@@ -86,10 +90,11 @@ export default function CarsSection() {
       name: car.name || '',
       brand: car.brand || '',
       details: car.details || '',
+      seats: car.seats || '',
+      features: Array.isArray(car.features) ? car.features.join(', ') : (car.features || ''),
       is_active: car.is_active ?? true,
       image: null,
-      // Use helper to show current image in modal properly
-      preview: getImageUrl(car.image_url), 
+      preview: getImageUrl(car.image_url),
     });
     setShowEditModal(true);
   };
@@ -143,8 +148,22 @@ export default function CarsSection() {
         payload.append('name', formData.name);
         payload.append('brand', formData.brand);
         payload.append('details', formData.details);
+        payload.append('seats', formData.seats);
+        // Features: send as JSON stringified array
+        try {
+          const featuresArr = formData.features.split(',').map(f => f.trim()).filter(Boolean);
+          payload.append('features', JSON.stringify(featuresArr));
+        } catch {
+          payload.append('features', '[]');
+        }
+        // Specs: send as JSON string
+        try {
+          payload.append('specs', formData.specs ? JSON.stringify(JSON.parse(formData.specs)) : '{}');
+        } catch {
+          payload.append('specs', '{}');
+        }
         // Ensure boolean is sent correctly (some backends prefer 1/0)
-        payload.append('is_active', formData.is_active ? '1' : '0'); 
+        payload.append('is_active', formData.is_active ? '1' : '0');
 
         if (formData.image) {
           payload.append('image', formData.image);
@@ -235,7 +254,7 @@ export default function CarsSection() {
 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
           <h3 className="text-xl font-bold mb-4">
             {isCreate ? 'Add New Car' : 'Edit Car'}
           </h3>
@@ -258,6 +277,26 @@ export default function CarsSection() {
                 placeholder="Brand"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Seats</label>
+              <input
+                className="input w-full border rounded p-2"
+                placeholder="Seats"
+                value={formData.seats}
+                onChange={(e) => setFormData({ ...formData, seats: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Features (comma separated)</label>
+              <input
+                className="input w-full border rounded p-2"
+                placeholder="e.g. AC, GPS, Bluetooth"
+                value={formData.features}
+                onChange={(e) => setFormData({ ...formData, features: e.target.value })}
               />
             </div>
 
@@ -346,7 +385,6 @@ export default function CarsSection() {
         loading={loading}
         actions={actions}
       />
-
       {renderModal(true)}
       {renderModal(false)}
     </div>
